@@ -29,13 +29,10 @@ function handleProfileData(data: Record<string, unknown>) {
     
     if (type === 'resume_score') {
       existingProfile.resumeScore = profileData
-      justProcessedResumeData = true  // 标记刚处理完简历数据
     } else if (type === 'ability_analysis') {
       existingProfile.abilityAnalysis = profileData
-      justProcessedResumeData = true
     } else if (type === 'student_profile') {
       existingProfile.studentProfile = profileData
-      justProcessedResumeData = true
     } else {
       console.log('handleProfileData: unknown type:', type)
     }
@@ -573,120 +570,6 @@ function createApp() {
   let uploadedFileUrl: string | null = null
   let lastResumeContent: string | null = null  // 存储最后一次上传的简历内容
   let pendingManualResumeText: string | null = null  // 存储手动录入的简历文本
-  let justProcessedResumeData = false  // 标记是否刚处理完简历数据，用于触发职业期望询问
-  let askExpectationsController: AbortController | null = null  // 控制职业期望询问请求
-  
-  // 触发职业期望询问
-  async function askCareerExpectations() {
-    // 防止重复触发
-    if (isGenerating || askExpectationsController) {
-      return
-    }
-    
-    isGenerating = true
-    askExpectationsController = new AbortController()
-    
-    // 构建职业期望询问的系统消息
-    const expectationsPrompt = `请继续输出以下内容（直接输出，不要加任何特殊标记）：
-
-我已经完成了您的简历分析和学生画像构建！现在需要了解您的职业期望，以便为您推荐合适的岗位。请问：
-
-1. 您期望从事哪个行业方向？（如：互联网、金融、教育、医疗、制造业等）
-`
-    
-    // 添加用户消息触发AI回复
-    conversationHistory.push({ role: 'user', content: '继续' })
-    
-    // 创建AI消息占位
-    const aiMessageDiv = addMessage('正在思考中……', false)
-    const aiTextElement = aiMessageDiv?.querySelector('.ai-message') as HTMLElement
-    
-    // 隐藏发送按钮，显示停止按钮
-    if (sendBtn) {
-      sendBtn.classList.add('hidden')
-    }
-    if (stopBtn) {
-      stopBtn.classList.remove('hidden')
-    }
-    
-    try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: [{ role: 'system', content: expectationsPrompt }, ...conversationHistory] }),
-        signal: askExpectationsController.signal,
-      })
-      
-      if (!response.ok) {
-        throw new Error('API request failed')
-      }
-      
-      const reader = response.body?.getReader()
-      const decoder = new TextDecoder()
-      let aiResponse = ''
-      
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-          
-          const chunk = decoder.decode(value)
-          const lines = chunk.split('\n')
-          
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              const data = line.slice(6)
-              if (data === '[DONE]') break
-              
-              try {
-                const parsed = JSON.parse(data)
-                if (parsed.content) {
-                  aiResponse += parsed.content
-                  if (aiTextElement) {
-                    aiTextElement.textContent = aiResponse
-                    if (!userScrolledUp) {
-                      messagesContainer!.scrollTop = messagesContainer!.scrollHeight
-                    }
-                  }
-                }
-              } catch {
-                // 忽略解析错误
-              }
-            }
-          }
-        }
-      }
-      
-      // 保存到历史并更新显示
-      if (aiTextElement) {
-        aiTextElement.textContent = aiResponse || '请告诉我您期望从事的行业方向'
-      }
-      conversationHistory.push({ role: 'assistant', content: aiResponse })
-      
-    } catch (error) {
-      if ((error as Error).name !== 'AbortError') {
-        console.error('Ask expectations error:', error)
-        if (aiTextElement) {
-          aiTextElement.textContent = '请告诉我您期望从事的行业方向'
-        }
-      }
-    } finally {
-      isGenerating = false
-      askExpectationsController = null
-      
-      // 恢复发送按钮，隐藏停止按钮
-      if (sendBtn) {
-        sendBtn.classList.remove('hidden')
-        sendBtn.style.opacity = '1'
-        sendBtn.style.pointerEvents = 'auto'
-      }
-      if (stopBtn) {
-        stopBtn.classList.add('hidden')
-      }
-      
-      userScrolledUp = false
-    }
-  }
   
   // 更新左侧卡片显示画像数据（提前定义，供 clearAllResumeData 使用）
   function updateProfileCard(profile: {
@@ -1535,15 +1418,6 @@ function createApp() {
         conversationHistory.push({ role: 'assistant', content: finalResponse })
       }
       
-      // 如果刚处理完简历数据，触发职业期望询问
-      if (justProcessedResumeData) {
-        justProcessedResumeData = false  // 重置标志
-        // 延迟触发职业期望询问
-        setTimeout(() => {
-          askCareerExpectations()
-        }, 500)
-      }
-      
       console.log('About to set isGenerating = false (normal completion)')
       isGenerating = false
       console.log('Generation complete, isGenerating:', isGenerating)
@@ -1591,23 +1465,9 @@ function createApp() {
     if (currentController) {
       currentController.abort()
     }
-    if (askExpectationsController) {
-      askExpectationsController.abort()
-      askExpectationsController = null
-    }
     isGenerating = false
     console.log('After stop, isGenerating:', isGenerating)
     userScrolledUp = false  // 停止后重置滚动标志
-    
-    // 恢复发送按钮，隐藏停止按钮
-    if (sendBtn) {
-      sendBtn.classList.remove('hidden')
-      sendBtn.style.opacity = '1'
-      sendBtn.style.pointerEvents = 'auto'
-    }
-    if (stopBtn) {
-      stopBtn.classList.add('hidden')
-    }
   })
 
   // 滚动占位符控制
