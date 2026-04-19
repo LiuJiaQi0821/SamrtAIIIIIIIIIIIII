@@ -124,6 +124,10 @@ router.post('/api/validate-resume', async (req, res) => {
   try {
     const { content, url } = req.body;
     
+    console.log('=== Validate resume request ===');
+    console.log('Content length:', content?.length || 0);
+    console.log('Content preview:', content?.substring(0, 500));
+    
     // 如果没有直接传内容，需要先解析文档
     if (!content && url) {
       // 这里需要调用文档解析服务获取内容
@@ -146,6 +150,8 @@ router.post('/api/validate-resume', async (req, res) => {
     
     // 验证简历内容
     const result = validateResume(content);
+    
+    console.log('Validation result:', JSON.stringify(result));
     
     res.json({
       success: true,
