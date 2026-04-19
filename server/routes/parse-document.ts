@@ -58,7 +58,7 @@ function getFileType(filename: string): 'pdf' | 'txt' | 'doc' | 'unknown' {
 function fixUtf8DoubleEncoding(text: string): string {
   // 检查是否包含可能是双重编码的字符
   // UTF-8 字符在 Latin-1 解码后会显示为特殊字符序列
-  const hasDoubleEncoding = /[\u00e3\u00c3\u00a0-\u00ff]/.test(text);
+  const hasDoubleEncoding = /[\u00e3\u00c3\u00a0-\u00ff\u0080-\u00ff]/.test(text);
   
   if (!hasDoubleEncoding) {
     return text;
@@ -69,7 +69,13 @@ function fixUtf8DoubleEncoding(text: string): string {
     // 将 JavaScript 字符串（UTF-16）转换为字节数组（Latin-1 视角）
     const bytes: number[] = [];
     for (let i = 0; i < text.length; i++) {
-      bytes.push(text.charCodeAt(i) & 0xFF);
+      const charCode = text.charCodeAt(i);
+      // 只处理扩展 Latin-1 范围内的字符
+      if (charCode > 127) {
+        bytes.push(charCode & 0xFF);
+      } else {
+        bytes.push(charCode);
+      }
     }
     
     // 将字节数组转换回 Buffer 并按 UTF-8 解码
@@ -90,43 +96,50 @@ function fixUtf8DoubleEncoding(text: string): string {
   return text;
 }
 
-// 检测并修复编码问题
-function fixEncoding(text: string): string {
-  // 首先检查是否是双重编码
-  const fixed = fixUtf8DoubleEncoding(text);
+// 尝试多种编码解码，找到正确的中文
+function tryMultipleEncodings(buffer: Buffer): string {
+  const encodings = ['utf-8', 'gbk', 'gb2312', 'big5', 'latin1'];
   
-  // 检查是否包含有效的中文字符
-  const hasChinese = /[\u4e00-\u9fa5]/.test(fixed);
-  
-  if (hasChinese) {
-    return fixed;
-  }
-  
-  // 如果没有中文，尝试其他修复方法
-  // 检查是否包含乱码特征
-  const hasGarbledChars = /[\uFFFD]/.test(fixed);
-  const hasLatinExtended = /[\u0080-\u00FF]/.test(fixed);
-  
-  if (hasGarbledChars || (hasLatinExtended && !hasChinese)) {
-    // 尝试将字符串按 Latin-1 解码为字节，再按 UTF-8 重新解码
+  for (const enc of encodings) {
     try {
-      const bytes: number[] = [];
-      for (let i = 0; i < text.length; i++) {
-        bytes.push(text.charCodeAt(i) & 0xFF);
-      }
-      const buffer = Buffer.from(bytes);
-      const result = buffer.toString('utf-8');
-      
-      if (/[\u4e00-\u9fa5]/.test(result)) {
-        console.log('Applied Latin-1 -> UTF-8 fix');
-        return result;
+      const decoded = buffer.toString(enc);
+      // 检查是否包含有效的中文字符
+      if (/[\u4e00-\u9fa5]/.test(decoded)) {
+        console.log('Successfully decoded with:', enc);
+        return decoded;
       }
     } catch (e) {
       // 忽略
     }
   }
   
-  return fixed;
+  return buffer.toString('utf-8');
+}
+
+// 检测并修复编码问题
+function fixEncoding(text: string): string {
+  // 如果已经有中文字符，直接返回
+  if (/[\u4e00-\u9fa5]/.test(text)) {
+    return text;
+  }
+  
+  // 首先尝试双重编码修复
+  const fixed = fixUtf8DoubleEncoding(text);
+  if (/[\u4e00-\u9fa5]/.test(fixed)) {
+    return fixed;
+  }
+  
+  // 如果还是乱码，尝试另一种方法
+  // 将原始文本转换为字节，再尝试不同编码
+  try {
+    // 使用 Buffer 中间层来中转编码
+    const tempBuffer = Buffer.from(text, 'latin1');
+    return tryMultipleEncodings(tempBuffer);
+  } catch (e) {
+    // 忽略
+  }
+  
+  return text;
 }
 
 // 直接从代理URL下载文件内容
@@ -158,6 +171,7 @@ router.post('/api/parse-document', async (req, res) => {
     }
 
     console.log('=== Parse document request ===');
+    console.log('URL:', url);
 
     // 从URL中提取文件路径
     const filePath = extractFilePath(url);
@@ -193,6 +207,8 @@ router.post('/api/parse-document', async (req, res) => {
         console.log('FetchClient content preview:', textContent.substring(0, 100));
 
         if (textContent && textContent.trim().length > 0 && /[\u4e00-\u9fa5]/.test(textContent)) {
+          // 确保返回 UTF-8 编码的 JSON
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
           res.json({
             success: true,
             title: response.title,
@@ -236,6 +252,8 @@ router.post('/api/parse-document', async (req, res) => {
     console.log('Final content preview:', content.substring(0, 200));
 
     if (content && content.trim().length > 0) {
+      // 确保返回 UTF-8 编码的 JSON
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
       res.json({
         success: true,
         title: '',
