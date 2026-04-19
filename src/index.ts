@@ -1292,47 +1292,46 @@ function createApp() {
       console.log('Found hidden data blocks:', hiddenDataMatch?.length || 0)
       if (hiddenDataMatch) {
         hiddenDataMatch.forEach((match, index) => {
-          console.log(`Processing hidden block ${index + 1}:`, match.substring(0, 200))
-          const jsonContent = match.replace(/{{HIDDEN_DATA_START}}/, '').replace(/{{HIDDEN_DATA_END}}/, '').trim()
+          console.log(`Processing hidden block ${index + 1}:`, match.substring(0, 300))
+          // 移除 code block 标记
+          let jsonContent = match
+            .replace(/{{HIDDEN_DATA_START}}/, '')
+            .replace(/{{HIDDEN_DATA_END}}/, '')
+            .replace(/```json\s*/g, '')
+            .replace(/```\s*/g, '')
+            .trim()
           
-          // 提取所有 JSON 对象（支持单个 code block 中有多个 JSON）
-          const jsonMatches = jsonContent.match(/\{[^{}]*(?:\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}[^{}]*)*\}/g)
-          if (jsonMatches) {
-            console.log(`Found ${jsonMatches.length} JSON objects in block ${index + 1}`)
-            jsonMatches.forEach((jsonStr, jIndex) => {
-              try {
-                const jsonData = JSON.parse(jsonStr)
-                console.log(`Block ${index + 1}, JSON ${jIndex + 1} parsed, type:`, jsonData.type)
-                handleProfileData(jsonData)
-              } catch (e) {
-                console.log(`Block ${index + 1}, JSON ${jIndex + 1} parse error, trying broader match...`)
-                // 尝试更宽松的匹配
-                try {
-                  const broadMatch = jsonContent.match(/```json\s*([\s\S]*?)```/g)
-                  if (broadMatch) {
-                    broadMatch.forEach(block => {
-                      const cleaned = block.replace(/```json\s*/, '').replace(/```/, '').trim()
-                      // 尝试提取多个 JSON 对象
-                      const parts = cleaned.split('}\n{')
-                      parts.forEach((part, pIdx) => {
-                        try {
-                          const fullPart = pIdx === 0 ? part + '}' : '{' + part
-                          const parsed = JSON.parse(fullPart)
-                          console.log(`Block ${index + 1}, part ${pIdx + 1} parsed, type:`, parsed.type)
-                          handleProfileData(parsed)
-                        } catch {
-                          // 忽略
-                        }
-                      })
-                    })
-                  }
-                } catch {
-                  // 忽略
-                }
-              }
-            })
-          } else {
-            console.log(`Block ${index + 1}: No JSON found`)
+          console.log(`Block ${index + 1} cleaned content length:`, jsonContent.length)
+          
+          // 方法1：尝试分割多个 JSON 对象（用 }\n{ 分隔）
+          const parts = jsonContent.split(/}\s*\n\s*{/)
+          console.log(`Block ${index + 1} split into ${parts.length} parts`)
+          
+          parts.forEach((part, pIdx) => {
+            let jsonStr = part
+            // 第一个加 }，最后一个不加
+            if (pIdx > 0) jsonStr = '{' + jsonStr
+            if (pIdx < parts.length - 1) jsonStr = jsonStr + '}'
+            
+            try {
+              const jsonData = JSON.parse(jsonStr)
+              console.log(`Block ${index + 1}, part ${pIdx + 1} parsed, type:`, jsonData.type)
+              handleProfileData(jsonData)
+            } catch {
+              // 忽略解析失败的单个部分
+            }
+          })
+          
+          // 如果分割后没有成功解析任何 JSON，尝试整体解析
+          const parsedCount = parts.length
+          if (parsedCount === 0 || parsedCount === 1) {
+            try {
+              const jsonData = JSON.parse(jsonContent)
+              console.log(`Direct parse succeeded, type:`, jsonData.type)
+              handleProfileData(jsonData)
+            } catch {
+              // 忽略
+            }
           }
         })
       } else {
