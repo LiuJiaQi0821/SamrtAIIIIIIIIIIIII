@@ -129,6 +129,13 @@ const SYSTEM_PROMPT =
 '{{HIDDEN_DATA_START}}\n' +
 '```json\n' +
 '{"type":"resume_score","data":{...}}\n' +
+'```\n' +
+'\n' +
+'```json\n' +
+'{"type":"ability_analysis","data":{...}}\n' +
+'```\n' +
+'\n' +
+'```json\n' +
 '{"type":"student_profile","data":{...}}\n' +
 '```\n' +
 '{{HIDDEN_DATA_END}}\n' +
