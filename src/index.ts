@@ -563,7 +563,7 @@ function createApp() {
     const b = Math.max(0, Math.min(255, (num & 0x0000FF) + amount))
     return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`
   }
-  
+
   // 保存对话历史 - 支持多模态内容
   let conversationHistory: Array<{ role: string; content: string | Array<{ type: string; text?: string; image_url?: { url: string } }> }> = []
   let uploadedFile: File | null = null
@@ -1000,10 +1000,7 @@ function createApp() {
     uploadedFileUrl = null
 
     const message = messageInput?.value.trim()
-    // 检查是否有手动录入的简历
-    const hasManualResume = pendingManualResumeText !== null
-    
-    if (!message && !pendingFile && !hasManualResume) {
+    if (!message && !pendingFile) {
       isGenerating = false
       return
     }
@@ -1055,10 +1052,6 @@ function createApp() {
     } else if (message) {
       // 只有文本消息的情况
       addMessage(message, true)
-      messageInput.value = ''
-    } else if (hasManualResume) {
-      // 手动录入的简历，显示简历内容
-      addMessage(pendingManualResumeText, true)
       messageInput.value = ''
     }
 
@@ -1131,22 +1124,19 @@ function createApp() {
           }
         }
       }
+    } else if (pendingManualResumeText) {
+      // 手动录入简历的情况
+      // 清除旧画像数据，确保新简历生成新画像（保留对话历史和消息显示）
+      clearProfileData()
       
-      if (hasManualResume) {
-        // 手动录入的简历 - 直接构建确认消息
-        const manualResumeContent = pendingManualResumeText!
-        lastResumeContent = manualResumeContent  // 保存简历内容供后续确认使用
-        
-        // 手动录入的简历直接确认
-        const resumeConfirmMessage = '【简历确认】用户通过手动录入提交了简历，请仔细阅读以下内容，然后：\n1. 展示提取到的全部信息（按原文格式）\n2. 询问用户："以上是我从您的手动录入信息中整理的简历，请问是否正确完整？如果没有问题，我将为您构建学生画像。"\n\n---简历原文内容---\n' + manualResumeContent.substring(0, 10000) + '\n---简历原文结束---'
-        messageContent = resumeConfirmMessage
-        
-        // 清除 pendingManualResumeText
-        pendingManualResumeText = null
-      }
+      const resumeSummary = '【简历提取确认】用户手动填写了一份简历。请仔细阅读以下简历内容，然后：\n1. 展示提取到的全部信息（按原文格式），包括个人信息、教育背景、工作经历、技能描述、项目经验等所有内容\n2. 询问用户："以上是我从您填写的简历中提取到的全部信息，请问是否正确完整？请告诉我，如果没有问题，我将为您构建学生画像。"\n\n---简历原文内容---\n' + pendingManualResumeText.substring(0, 10000) + '\n---简历原文结束---'
       
-      if (!messageContent) {
-        // 没有文件时，检查是否为简历确认消息
+      messageContent = message ? message + '\n\n' + resumeSummary : resumeSummary
+      
+      // 清除 pendingManualResumeText，避免重复使用
+      pendingManualResumeText = null
+    } else {
+      // 没有文件且没有手动简历时，检查是否为简历确认消息
       const trimmedMessage = message.trim().toLowerCase()
       const confirmWords = ['正确', '没问题', '是的', '确认', 'ok', 'yes', 'y', '对', '可以', '好的', '继续', '开始分析', '生成画像', '分析简历']
       const isConfirmMessage = confirmWords.some(word => trimmedMessage.includes(word))
@@ -1163,6 +1153,7 @@ function createApp() {
       } else {
         messageContent = message
       }
+    }
 
     // 添加用户消息到历史
     conversationHistory.push({ role: 'user', content: messageContent })
