@@ -800,11 +800,14 @@ function createApp() {
     
     // 人岗匹配度卡片（新格式 - 四个维度）
     if (profile.jobMatch && profile.jobMatch.matches) {
+      console.log('开始渲染岗位匹配卡片，原始数据:', profile.jobMatch.matches?.length)
+      
       // 按匹配度从高到低排序
-      const sortedMatches = [...profile.jobMatch.matches].sort((a, b) => 
+      const sortedMatches = [...(profile.jobMatch.matches || [])].sort((a, b) => 
         (b.overall_score || 0) - (a.overall_score || 0)
       )
       const matches = sortedMatches.slice(0, 5)  // 只显示前5个
+      console.log('排序后的岗位数:', matches.length)
       
       const dimensionLabels: Record<string, string> = {
         basic_requirements: '基础要求匹配',
@@ -814,8 +817,16 @@ function createApp() {
       }
       
       matches.forEach((match: any, idx: number) => {
-        const overallColor = match.overall_score >= 80 ? 'text-green-600' : match.overall_score >= 60 ? 'text-amber-600' : 'text-red-600'
-        const overallBgColor = match.overall_score >= 80 ? 'bg-green-100' : match.overall_score >= 60 ? 'bg-amber-100' : 'bg-red-100'
+        console.log(`渲染岗位 ${idx + 1}:`, match?.job_title || '无标题')
+        
+        // 容错处理：如果岗位数据不完整，跳过
+        if (!match) {
+          console.log(`岗位 ${idx + 1} 数据为空，跳过`)
+          return
+        }
+        
+        const overallColor = (match.overall_score || 0) >= 80 ? 'text-green-600' : (match.overall_score || 0) >= 60 ? 'text-amber-600' : 'text-red-600'
+        const overallBgColor = (match.overall_score || 0) >= 80 ? 'bg-green-100' : (match.overall_score || 0) >= 60 ? 'bg-amber-100' : 'bg-red-100'
         
         html += `
           <div class="job-match-card">
@@ -826,8 +837,8 @@ function createApp() {
                 </svg>
               </div>
               <div class="flex-1">
-                <h3 class="card-title">${match.job_title}</h3>
-                <p class="text-sm text-gray-500">${match.company} · ${match.location || '地点未知'} · ${match.salary || '薪资面议'}</p>
+                <h3 class="card-title">${match.job_title || '岗位名称'}</h3>
+                <p class="text-sm text-gray-500">${match.company || '公司名'} · ${match.location || '地点未知'} · ${match.salary || '薪资面议'}</p>
               </div>
               <div class="text-center">
                 <div class="w-16 h-16 ${overallBgColor} rounded-full flex items-center justify-center">
@@ -842,33 +853,34 @@ function createApp() {
               <div class="grid grid-cols-2 gap-4 mb-4">
         `
         
-        // 渲染四个维度
-        const dimensions = match.dimensions || {}
-        for (const [key, label] of Object.entries(dimensionLabels)) {
-          const dim = dimensions[key] || { score: 0, weight: 25 }
-          const dimColor = dim.score >= 80 ? 'text-green-600' : dim.score >= 60 ? 'text-amber-600' : 'text-red-600'
-          
-          html += `
-            <div class="bg-gray-50 rounded-lg p-3">
-              <div class="flex justify-between items-center mb-2">
-                <span class="text-sm font-medium text-gray-700">${label}</span>
-                <div class="flex items-center gap-2">
-                  <span class="text-xs text-gray-400">权重${dim.weight}%</span>
-                  <span class="${dimColor} font-bold">${dim.score}</span>
+        try {
+          // 渲染四个维度
+          const dimensions = match.dimensions || {}
+          for (const [key, label] of Object.entries(dimensionLabels)) {
+            const dim = dimensions[key] || { score: 0, weight: 25 }
+            const dimColor = (dim.score || 0) >= 80 ? 'text-green-600' : (dim.score || 0) >= 60 ? 'text-amber-600' : 'text-red-600'
+            
+            html += `
+              <div class="bg-gray-50 rounded-lg p-3">
+                <div class="flex justify-between items-center mb-2">
+                  <span class="text-sm font-medium text-gray-700">${label}</span>
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs text-gray-400">权重${dim.weight || 25}%</span>
+                    <span class="${dimColor} font-bold">${dim.score || 0}</span>
+                  </div>
+                </div>
+                <div class="h-2 bg-gray-200 rounded-full overflow-hidden">
+                  <div class="h-full rounded-full transition-all duration-500" style="width: ${Math.min(dim.score || 0, 100)}%; background: linear-gradient(90deg, #5BB8D8, #7AD0E8);"></div>
                 </div>
               </div>
-              <div class="h-2 bg-gray-200 rounded-full overflow-hidden">
-                <div class="h-full rounded-full transition-all duration-500" style="width: ${dim.score}%; background: linear-gradient(90deg, #5BB8D8, #7AD0E8);"></div>
-              </div>
-            </div>
-          `
-        }
-        
-        html += `
+            `
+          }
+          
+          html += `
               </div>
               
               <!-- 核心优势 -->
-              ${match.key_strengths?.length > 0 ? `
+              ${(match.key_strengths && match.key_strengths.length > 0) ? `
                 <div class="match-section mb-4">
                   <h4 class="match-section-title text-green-700 font-medium mb-2 flex items-center gap-2">
                     <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
@@ -877,7 +889,7 @@ function createApp() {
                     核心优势
                   </h4>
                   <div class="flex flex-wrap gap-2">
-                    ${match.key_strengths.map((strength: string) => `
+                    ${(match.key_strengths || []).map((strength: string) => `
                       <span class="px-3 py-1 bg-green-50 text-green-700 rounded-full text-sm">${strength}</span>
                     `).join('')}
                   </div>
@@ -885,7 +897,7 @@ function createApp() {
               ` : ''}
               
               <!-- 关键差距（高亮显示） -->
-              ${match.key_gaps?.length > 0 ? `
+              ${(match.key_gaps && match.key_gaps.length > 0) ? `
                 <div class="match-section mb-4">
                   <h4 class="match-section-title text-red-700 font-medium mb-2 flex items-center gap-2">
                     <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
@@ -894,7 +906,7 @@ function createApp() {
                     关键差距（需要改进）
                   </h4>
                   <div class="flex flex-wrap gap-2">
-                    ${match.key_gaps.map((gap: string) => `
+                    ${(match.key_gaps || []).map((gap: string) => `
                       <span class="px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm font-medium border-2 border-red-300 animate-pulse">${gap}</span>
                     `).join('')}
                   </div>
@@ -903,51 +915,73 @@ function createApp() {
               
               <!-- 各维度详细分析 -->
               <div class="space-y-3">
-        `
-        
-        // 渲染各维度的优势和差距
-        for (const [key, label] of Object.entries(dimensionLabels)) {
-          const dim = dimensions[key]
-          if (!dim) continue
+          `
+          
+          // 渲染各维度的优势和差距
+          for (const [key, label] of Object.entries(dimensionLabels)) {
+            const dim = dimensions[key]
+            if (!dim) continue
+            
+            html += `
+              <div class="border-l-2 border-blue-300 pl-3">
+                <h5 class="text-sm font-medium text-gray-700 mb-2">${label}详解</h5>
+                <p class="text-sm text-gray-600 mb-2">${dim.analysis || '分析中...'}</p>
+                ${(dim.strengths && dim.strengths.length > 0) ? `
+                  <div class="flex flex-wrap gap-1 mb-1">
+                    ${(dim.strengths || []).map((s: string) => `<span class="text-xs px-2 py-0.5 bg-green-50 text-green-600 rounded">✓ ${s}</span>`).join('')}
+                  </div>
+                ` : ''}
+                ${(dim.gaps && dim.gaps.length > 0) ? `
+                  <div class="flex flex-wrap gap-1">
+                    ${(dim.gaps || []).map((g: string) => `<span class="text-xs px-2 py-0.5 bg-red-50 text-red-600 rounded">✗ ${g}</span>`).join('')}
+                  </div>
+                ` : ''}
+              </div>
+            `
+          }
+          
+          // 改进建议
+          if (match.suggestions) {
+            html += `
+              <div class="mt-4 p-3 bg-blue-50 rounded-lg">
+                <h5 class="text-sm font-medium text-blue-700 mb-1 flex items-center gap-2">
+                  <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M11 3a1 1 0 10-2 0v1a1 1 0 102 0V3zM15.657 5.757a1 1 0 00-1.414-1.414l-.707.707a1 1 0 001.414 1.414l.707-.707zM18 10a1 1 0 01-1 1h-1a1 1 0 110-2h1a1 1 0 011 1zM5.05 6.464A1 1 0 106.464 5.05l-.707-.707a1 1 0 00-1.414 1.414l.707.707zM5 10a1 1 0 01-1 1H3a1 1 0 110-2h1a1 1 0 011 1zM8 16v-1h4v1a2 2 0 11-4 0zM12 14c.015-.34.208-.646.477-.859a4 4 0 10-4.954 0c.27.213.462.519.476.859h4.002z"></path>
+                  </svg>
+                  改进建议
+                </h5>
+                <p class="text-sm text-blue-600">${match.suggestions}</p>
+              </div>
+            `
+          }
           
           html += `
-            <div class="border-l-2 border-blue-300 pl-3">
-              <h5 class="text-sm font-medium text-gray-700 mb-2">${label}详解</h5>
-              <p class="text-sm text-gray-600 mb-2">${dim.analysis || '分析中...'}</p>
-              ${dim.strengths?.length > 0 ? `
-                <div class="flex flex-wrap gap-1 mb-1">
-                  ${dim.strengths.map((s: string) => `<span class="text-xs px-2 py-0.5 bg-green-50 text-green-600 rounded">✓ ${s}</span>`).join('')}
-                </div>
-              ` : ''}
-              ${dim.gaps?.length > 0 ? `
-                <div class="flex flex-wrap gap-1">
-                  ${dim.gaps.map((g: string) => `<span class="text-xs px-2 py-0.5 bg-red-50 text-red-600 rounded">✗ ${g}</span>`).join('')}
-                </div>
-              ` : ''}
-            </div>
-          `
-        }
-        
-        // 改进建议
-        if (match.suggestions) {
-          html += `
-            <div class="mt-4 p-3 bg-blue-50 rounded-lg">
-              <h5 class="text-sm font-medium text-blue-700 mb-1 flex items-center gap-2">
-                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M11 3a1 1 0 10-2 0v1a1 1 0 102 0V3zM15.657 5.757a1 1 0 00-1.414-1.414l-.707.707a1 1 0 001.414 1.414l.707-.707zM18 10a1 1 0 01-1 1h-1a1 1 0 110-2h1a1 1 0 011 1zM5.05 6.464A1 1 0 106.464 5.05l-.707-.707a1 1 0 00-1.414 1.414l.707.707zM5 10a1 1 0 01-1 1H3a1 1 0 110-2h1a1 1 0 011 1zM8 16v-1h4v1a2 2 0 11-4 0zM12 14c.015-.34.208-.646.477-.859a4 4 0 10-4.954 0c.27.213.462.519.476.859h4.002z"></path>
-                </svg>
-                改进建议
-              </h5>
-              <p class="text-sm text-blue-600">${match.suggestions}</p>
-            </div>
-          `
-        }
-        
-        html += `
               </div>
             </div>
           </div>
-        `
+          `
+        } catch (renderError) {
+          console.error(`渲染岗位 ${idx + 1} 时出错:`, renderError)
+          // 出错时也渲染一个简单卡片
+          html += `
+            <div class="job-match-card">
+              <div class="card-header">
+                <div class="card-icon">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                  </svg>
+                </div>
+                <div class="flex-1">
+                  <h3 class="card-title">${match.job_title || '岗位名称'}</h3>
+                  <p class="text-sm text-gray-500">${match.company || '公司名'}</p>
+                </div>
+              </div>
+              <div class="p-4 text-center text-gray-500">
+                岗位详细分析加载中...
+              </div>
+            </div>
+          `
+        }
       })
     }
     
