@@ -143,12 +143,24 @@ ${profileSummary}
 【匹配岗位】
 ${jobsSummary}
 
-请为每个岗位分析：
-1. 人岗匹配度（0-100分）
-2. 专业技能契合度分析
-3. 通用素质契合度分析
-4. 差距与建议
+请为每个岗位从以下四个维度进行详细分析和打分：
 
+## 评分维度说明
+1. **基础要求匹配** (权重自适应): 学历、专业、工作年限等岗位硬性要求
+2. **职业技能匹配** (权重自适应): 技术栈、工具、证书等专业技能
+3. **职业素养匹配** (权重自适应): 沟通能力、抗压能力、团队协作等软技能
+4. **发展潜力匹配** (权重自适应): 学习能力、创新能力、领导力等发展潜力
+
+## 权重自适应规则
+- 如果岗位对技术要求高，职业技能匹配权重增加
+- 如果岗位对经验要求高，基础要求匹配权重增加
+- 如果岗位是管理岗，职业素养和发展潜力权重增加
+- 四个维度权重总和必须为100%
+
+## 打分标准（0-100分）
+每个维度单独打分，然后计算加权总分。
+
+## 输出格式要求
 请使用JSON格式输出，格式如下：
 \`\`\`json
 {
@@ -156,24 +168,57 @@ ${jobsSummary}
     {
       "job_title": "岗位名称",
       "company": "公司名",
+      "salary": "薪资",
+      "location": "地点",
+      "industry": "行业",
       "overall_score": 85,
-      "skill_match": {
-        "score": 80,
-        "analysis": "专业技能分析..."
+      "match_percentage": "85%",
+      "dimensions": {
+        "basic_requirements": {
+          "score": 80,
+          "weight": 25,
+          "analysis": "基础要求分析...",
+          "strengths": ["优势1", "优势2"],
+          "gaps": ["差距1", "差距2"]
+        },
+        "professional_skills": {
+          "score": 90,
+          "weight": 35,
+          "analysis": "职业技能分析...",
+          "strengths": ["优势1", "优势2"],
+          "gaps": ["差距1", "差距2"]
+        },
+        "professional_quality": {
+          "score": 85,
+          "weight": 20,
+          "analysis": "职业素养分析...",
+          "strengths": ["优势1", "优势2"],
+          "gaps": ["差距1", "差距2"]
+        },
+        "development_potential": {
+          "score": 88,
+          "weight": 20,
+          "analysis": "发展潜力分析...",
+          "strengths": ["优势1", "优势2"],
+          "gaps": ["差距1", "差距2"]
+        }
       },
-      "quality_match": {
-        "score": 90,
-        "analysis": "通用素质分析..."
-      },
-      "gaps": "差距分析...",
-      "suggestions": "建议..."
+      "key_strengths": ["核心优势1", "核心优势2", "核心优势3"],
+      "key_gaps": ["关键差距1", "关键差距2"],
+      "suggestions": "改进建议..."
     }
   ]
 }
 \`\`\`
 
+注意：
+- 每个维度必须包含 strengths（优势项）和 gaps（差距项）
+- key_gaps 中的差距项需要在前端高亮显示
+- 权重必须根据岗位特点自适应调整
+- overall_score 是加权总分：(basic_score×basic_weight + skill_score×skill_weight + quality_score×quality_weight + potential_score×potential_weight) / 100
+
 然后输出一句友好的提示语（单独一行，不含JSON）：
-"岗位匹配分析已完成！请查看左侧卡片了解详细的匹配度分析结果。"
+"岗位匹配分析已完成！为您找到了5个最匹配的岗位，请查看左侧卡片了解详细分析结果。"
 `;
 
       try {
