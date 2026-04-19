@@ -990,6 +990,9 @@ function createApp() {
       return
     }
     
+    // 重置标志
+    hasJsonDataInThisResponse = false
+    
     // 标记为正在生成
     console.log('Setting isGenerating = true')
     isGenerating = true
@@ -1263,6 +1266,7 @@ function createApp() {
                         // 检测 JSON 代码块开始（后台数据不展示）
                         if (!inJsonCodeBlock && remaining.startsWith('```json')) {
                           inJsonCodeBlock = true
+                          hasJsonDataInThisResponse = true  // 标记有JSON数据
                           codeBlockStart = i
                           i += 5  // 跳过 "```json"
                           continue
@@ -1281,8 +1285,10 @@ function createApp() {
                         }
                       }
                       
-                      // 如果正在处理隐藏数据，显示询问用户期望岗位
-                      if (hiddenBlockCount > 0) {
+                      // 如果有JSON数据，显示"正在分析中……"
+                      if (hasJsonDataInThisResponse) {
+                        displayContent = '正在分析中……'
+                      } else if (hiddenBlockCount > 0) {
                         // 计算已接收的可见字符数量
                         const visibleChars = currentDisplay.length
                         displayContent = '正在分析简历信息……请问您期望从事哪个岗位方向？'
@@ -1405,6 +1411,7 @@ function createApp() {
 
       // 只有在正常完成时才保存到历史（如果是中断，内容已经在消息框中了）
       // 保存时也要移除隐藏数据和JSON代码块（后台数据不展示）
+      let finalContentToSave = ''
       if (aiResponse) {
         const finalResponse = aiResponse
           .replace(/{{HIDDEN_DATA_START}}[\s\S]*?{{HIDDEN_DATA_END}}/g, '')
@@ -1412,13 +1419,27 @@ function createApp() {
           .replace(/```[\s\S]*?```/g, '')  // 移除所有代码块
           .trim()
         
-        // 更新消息元素内容，移除JSON代码块
-        if (aiTextElement) {
-          aiTextElement.textContent = finalResponse || '分析完成'
+        finalContentToSave = finalResponse
+        
+        // 如果有JSON数据，替换为职业期望询问
+        if (hasJsonDataInThisResponse) {
+          const careerQuestion = '我已经完成了您的简历分析和学生画像构建！现在需要了解您的职业期望，以便为您推荐合适的岗位。请问：\n\n1. 期望从事的行业（如：互联网、金融、教育、医疗等）'
+          if (aiTextElement) {
+            aiTextElement.textContent = careerQuestion
+          }
+          finalContentToSave = careerQuestion
+        } else {
+          // 更新消息元素内容，移除JSON代码块
+          if (aiTextElement) {
+            aiTextElement.textContent = finalResponse || '分析完成'
+          }
         }
         
-        conversationHistory.push({ role: 'assistant', content: finalResponse })
+        conversationHistory.push({ role: 'assistant', content: finalContentToSave })
       }
+      
+      // 重置标志
+      hasJsonDataInThisResponse = false
       
       console.log('About to set isGenerating = false (normal completion)')
       isGenerating = false
