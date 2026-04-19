@@ -1197,9 +1197,10 @@ function createApp() {
         return
       } else {
         // 还有下一个问题，继续询问
-        const aiMessageDiv = addMessage(`请问：\n\n${currentExpectationQuestion + 1}. ${expectationQuestions[currentExpectationQuestion]}`, false)
+        const nextQuestion = `请问：\n\n${currentExpectationQuestion + 1}. ${expectationQuestions[currentExpectationQuestion]}`
+        const aiMessageDiv = addMessage(nextQuestion, false)
         conversationHistory.push({ role: 'user', content: message })
-        conversationHistory.push({ role: 'assistant', content: `请问：\n\n${currentExpectationQuestion + 1}. ${expectationQuestions[currentExpectationQuestion]}` })
+        conversationHistory.push({ role: 'assistant', content: nextQuestion })
         return
       }
     }
