@@ -801,8 +801,7 @@ function createApp() {
     localStorage.removeItem('studentProfile')
     // 直接调用卡片更新函数，清除左侧卡片显示
     updateProfileCard({})
-    // 清除简历内容缓存
-    lastResumeContent = null
+    // 注意：不清除 lastResumeContent，因为它在确认消息中使用
   }
   
   // 保留旧函数名作为别名（兼容）
@@ -971,11 +970,12 @@ function createApp() {
   async function handleSend() {
     // 检查是否正在生成中
     if (isGenerating) {
-      console.log('Already generating, ignoring send')
+      console.log('Already generating, ignoring send - isGenerating:', isGenerating)
       return
     }
     
     // 标记为正在生成
+    console.log('Setting isGenerating = true')
     isGenerating = true
     console.log('handleSend called, isGenerating:', isGenerating)
 
@@ -1183,7 +1183,11 @@ function createApp() {
 
           try {
             const { done, value } = await reader.read()
-            if (done) break
+            console.log('reader.read() done:', done, 'isGenerating:', isGenerating)
+            if (done) {
+              console.log('Reader stream done, breaking while loop')
+              break
+            }
 
             lastDataTime = Date.now()  // 更新最后收到数据的时间
             const chunk = decoder.decode(value)
@@ -1193,6 +1197,7 @@ function createApp() {
               if (line.startsWith('data: ')) {
                 const data = line.slice(6)
                 if (data === '[DONE]') {
+                  console.log('Received [DONE] signal, setting isGenerating = false')
                   isGenerating = false
                   break
                 }
@@ -1294,6 +1299,7 @@ function createApp() {
           .trim()
         conversationHistory.push({ role: 'assistant', content: finalResponse })
       }
+      console.log('About to set isGenerating = false (normal completion)')
       isGenerating = false
       console.log('Generation complete, isGenerating:', isGenerating)
       userScrolledUp = false  // 输出完成后重置滚动标志
@@ -1306,6 +1312,7 @@ function createApp() {
       if (aiResponse) {
         conversationHistory.push({ role: 'assistant', content: aiResponse })
       }
+      console.log('About to set isGenerating = false (error)')
       isGenerating = false
       console.log('Generation error, isGenerating:', isGenerating)
       userScrolledUp = false  // 出错后也重置滚动标志
