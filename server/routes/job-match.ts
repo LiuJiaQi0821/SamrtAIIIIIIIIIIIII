@@ -135,13 +135,19 @@ router.post('/api/job-match', async (req, res) => {
       
       const profileSummary = JSON.stringify(profile, null, 2);
       
-      const analysisPrompt = `请进行人岗匹配度分析，输出以下内容：
+      const analysisPrompt = `请进行人岗匹配度分析，严格按照以下要求输出：
 
 【学生画像】
 ${profileSummary}
 
 【匹配岗位】
 ${jobsSummary}
+
+【输出要求 - 必须严格遵守】
+1. 只输出JSON格式的匹配分析结果 + 一句友好提示语
+2. **严禁**输出任何表格、Markdown格式的岗位列表
+3. **严禁**输出"### 岗位匹配结果"、"| 岗位名称 |..."这类内容
+4. **严禁**输出任何额外的解释说明文字
 
 请为每个岗位从以下四个维度进行详细分析和打分：
 
@@ -219,6 +225,12 @@ ${jobsSummary}
 
 然后输出一句友好的提示语（单独一行，不含JSON）：
 "岗位匹配分析已完成！为您找到了5个最匹配的岗位，请查看左侧卡片了解详细分析结果。"
+
+【重要警告】
+- **严禁**输出任何表格
+- **严禁**输出"岗位名称 | 所属行业 | ..."这类内容
+- **严禁**输出Markdown格式的列表
+- 只输出JSON代码块 + 一句友好提示语
 `;
 
       try {
