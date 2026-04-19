@@ -800,7 +800,11 @@ function createApp() {
     
     // 人岗匹配度卡片（新格式 - 四个维度）
     if (profile.jobMatch && profile.jobMatch.matches) {
-      const matches = profile.jobMatch.matches.slice(0, 5)  // 只显示前5个
+      // 按匹配度从高到低排序
+      const sortedMatches = [...profile.jobMatch.matches].sort((a, b) => 
+        (b.overall_score || 0) - (a.overall_score || 0)
+      )
+      const matches = sortedMatches.slice(0, 5)  // 只显示前5个
       
       const dimensionLabels: Record<string, string> = {
         basic_requirements: '基础要求匹配',
