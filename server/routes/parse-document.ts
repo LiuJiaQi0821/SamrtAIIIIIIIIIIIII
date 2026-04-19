@@ -54,23 +54,20 @@ function getFileType(filename: string): 'pdf' | 'txt' | 'doc' | 'unknown' {
   return 'unknown';
 }
 
-// 修复双重编码问题（UTF-8 字节被当作 Latin-1 解码）
+// 修复双重编码问题
 function fixUtf8DoubleEncoding(text: string): string {
-  // 检查是否包含可能是双重编码的字符
-  // UTF-8 字符在 Latin-1 解码后会显示为特殊字符序列
   const hasDoubleEncoding = /[\u00e3\u00c3\u00a0-\u00ff\u0080-\u00ff]/.test(text);
+  
+  console.log('fixUtf8DoubleEncoding - hasDoubleEncoding:', hasDoubleEncoding);
   
   if (!hasDoubleEncoding) {
     return text;
   }
   
-  // 将字符串的每个字符转换为字节，然后重新按 UTF-8 解码
   try {
-    // 将 JavaScript 字符串（UTF-16）转换为字节数组（Latin-1 视角）
     const bytes: number[] = [];
     for (let i = 0; i < text.length; i++) {
       const charCode = text.charCodeAt(i);
-      // 只处理扩展 Latin-1 范围内的字符
       if (charCode > 127) {
         bytes.push(charCode & 0xFF);
       } else {
@@ -78,14 +75,13 @@ function fixUtf8DoubleEncoding(text: string): string {
       }
     }
     
-    // 将字节数组转换回 Buffer 并按 UTF-8 解码
+    console.log('Bytes array length:', bytes.length);
     const buffer = Buffer.from(bytes);
+    console.log('Buffer length:', buffer.length);
     const fixed = buffer.toString('utf-8');
+    console.log('Fixed string length:', fixed.length, 'Has Chinese:', /[\u4e00-\u9fa5]/.test(fixed));
     
-    // 检查修复后是否包含有效的中文字符
-    const hasChinese = /[\u4e00-\u9fa5]/.test(fixed);
-    
-    if (hasChinese) {
+    if (/[\u4e00-\u9fa5]/.test(fixed)) {
       console.log('Fixed double encoding, Chinese chars found');
       return fixed;
     }
@@ -96,20 +92,23 @@ function fixUtf8DoubleEncoding(text: string): string {
   return text;
 }
 
-// 尝试多种编码解码，找到正确的中文
+// 尝试多种编码解码
 function tryMultipleEncodings(buffer: Buffer): string {
   const encodings = ['utf-8', 'gbk', 'gb2312', 'big5', 'latin1'];
+  
+  console.log('tryMultipleEncodings - buffer length:', buffer.length);
   
   for (const enc of encodings) {
     try {
       const decoded = buffer.toString(enc);
-      // 检查是否包含有效的中文字符
-      if (/[\u4e00-\u9fa5]/.test(decoded)) {
+      const hasChinese = /[\u4e00-\u9fa5]/.test(decoded);
+      console.log('  Trying', enc, '- length:', decoded.length, 'hasChinese:', hasChinese);
+      if (hasChinese) {
         console.log('Successfully decoded with:', enc);
         return decoded;
       }
     } catch (e) {
-      // 忽略
+      console.log('  Failed with', enc);
     }
   }
   
@@ -118,21 +117,16 @@ function tryMultipleEncodings(buffer: Buffer): string {
 
 // 检测并修复编码问题
 function fixEncoding(text: string): string {
-  // 如果已经有中文字符，直接返回
   if (/[\u4e00-\u9fa5]/.test(text)) {
     return text;
   }
   
-  // 首先尝试双重编码修复
   const fixed = fixUtf8DoubleEncoding(text);
   if (/[\u4e00-\u9fa5]/.test(fixed)) {
     return fixed;
   }
   
-  // 如果还是乱码，尝试另一种方法
-  // 将原始文本转换为字节，再尝试不同编码
   try {
-    // 使用 Buffer 中间层来中转编码
     const tempBuffer = Buffer.from(text, 'latin1');
     return tryMultipleEncodings(tempBuffer);
   } catch (e) {
@@ -150,8 +144,6 @@ async function downloadFromProxy(url: string): Promise<Buffer | null> {
       console.error('Proxy fetch failed:', response.status);
       return null;
     }
-    
-    // 获取原始二进制数据
     const arrayBuffer = await response.arrayBuffer();
     return Buffer.from(arrayBuffer);
   } catch (error) {
@@ -160,13 +152,32 @@ async function downloadFromProxy(url: string): Promise<Buffer | null> {
   }
 }
 
+// 检测并解码文件内容
+function detectAndDecode(buffer: Buffer): string {
+  // 检查 BOM
+  if (buffer.length >= 3 && buffer[0] === 0xEF && buffer[1] === 0xBB && buffer[2] === 0xBF) {
+    return buffer.toString('utf8').substring(1);
+  }
+  
+  // 尝试多种编码
+  return tryMultipleEncodings(buffer);
+}
+
+// 手动发送 JSON 响应，确保 UTF-8 编码正确
+function sendJson(res: any, data: any): void {
+  const jsonString = JSON.stringify(data);
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('Content-Length', Buffer.byteLength(jsonString, 'utf8'));
+  res.send(jsonString);
+}
+
 // 解析文档API
 router.post('/api/parse-document', async (req, res) => {
   try {
     const { url } = req.body;
     
     if (!url) {
-      res.status(400).json({ error: 'URL is required' });
+      sendJson(res, { error: 'URL is required' });
       return;
     }
 
@@ -176,7 +187,7 @@ router.post('/api/parse-document', async (req, res) => {
     // 从URL中提取文件路径
     const filePath = extractFilePath(url);
     if (!filePath) {
-      res.json({ success: false, error: 'Unable to extract file path' });
+      sendJson(res, { success: false, error: 'Unable to extract file path' });
       return;
     }
 
@@ -207,13 +218,11 @@ router.post('/api/parse-document', async (req, res) => {
         console.log('FetchClient content preview:', textContent.substring(0, 100));
 
         if (textContent && textContent.trim().length > 0 && /[\u4e00-\u9fa5]/.test(textContent)) {
-          // 确保返回 UTF-8 编码的 JSON
-          res.setHeader('Content-Type', 'application/json; charset=utf-8');
-          res.json({
+          sendJson(res, {
             success: true,
-            title: response.title,
+            title: response.title || '',
             content: textContent,
-            url: response.url,
+            url: response.url || url,
           });
           return;
         }
@@ -226,7 +235,7 @@ router.post('/api/parse-document', async (req, res) => {
     const fileBuffer = await downloadFromProxy(url);
     
     if (!fileBuffer || fileBuffer.length === 0) {
-      res.json({ success: false, error: 'Unable to download file' });
+      sendJson(res, { success: false, error: 'Unable to download file' });
       return;
     }
 
@@ -243,7 +252,6 @@ router.post('/api/parse-document', async (req, res) => {
       case 'txt':
       case 'unknown':
       default:
-        // 尝试检测文件编码
         content = detectAndDecode(fileBuffer);
         break;
     }
@@ -252,50 +260,22 @@ router.post('/api/parse-document', async (req, res) => {
     console.log('Final content preview:', content.substring(0, 200));
 
     if (content && content.trim().length > 0) {
-      // 确保返回 UTF-8 编码的 JSON
-      res.setHeader('Content-Type', 'application/json; charset=utf-8');
-      res.json({
+      sendJson(res, {
         success: true,
         title: '',
         content: content,
         url: url,
       });
     } else {
-      res.json({
+      sendJson(res, {
         success: false,
         error: 'Unable to extract content from file'
       });
     }
   } catch (error) {
     console.error('Parse document error:', error);
-    res.status(500).json({ error: 'Failed to parse document' });
+    sendJson(res, { error: 'Failed to parse document' });
   }
 });
-
-// 检测并解码文件内容
-function detectAndDecode(buffer: Buffer): string {
-  // 检查 BOM
-  if (buffer.length >= 3 && buffer[0] === 0xEF && buffer[1] === 0xBB && buffer[2] === 0xBF) {
-    return buffer.toString('utf8').substring(1);
-  }
-  
-  // 尝试 UTF-8
-  const utf8 = buffer.toString('utf8');
-  if (/[\u4e00-\u9fa5]/.test(utf8)) {
-    return utf8;
-  }
-  
-  // 尝试 Latin-1 -> UTF-8 修复
-  const bytes: number[] = [];
-  for (let i = 0; i < buffer.length; i++) {
-    bytes.push(buffer[i]);
-  }
-  const fixed = Buffer.from(bytes).toString('utf8');
-  if (/[\u4e00-\u9fa5]/.test(fixed)) {
-    return fixed;
-  }
-  
-  return utf8;
-}
 
 export default router;
