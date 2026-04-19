@@ -21,22 +21,29 @@ async function parsePdfContent(buffer: Buffer): Promise<string> {
   }
 }
 
-// 从URL中提取文件key
-function extractFileKey(url: string): string | null {
+// 从URL中提取文件路径
+function extractFilePath(url: string): string | null {
   try {
     const urlObj = new URL(url);
-    // 路径格式: /bucket-name/path/to/file.txt?signature=xxx
+    
+    // 优先从 file_path 参数提取（代理接口格式）
+    const filePath = urlObj.searchParams.get('file_path');
+    if (filePath) {
+      console.log('Extracted file_path param:', filePath);
+      return decodeURIComponent(filePath);
+    }
+    
+    // 否则从路径中提取
     const pathParts = urlObj.pathname.split('/');
-    // 跳过存储桶名称，获取 key
     if (pathParts.length < 4) {
       console.error('Invalid URL path:', urlObj.pathname);
       return null;
     }
     const key = pathParts.slice(3).join('/').split('?')[0];
-    console.log('Extracted key:', key, 'from URL:', url);
+    console.log('Extracted key from path:', key);
     return key;
   } catch (error) {
-    console.error('Extract key error:', error);
+    console.error('Extract path error:', error);
     return null;
   }
 }
@@ -48,6 +55,24 @@ function getFileType(filename: string): 'pdf' | 'txt' | 'doc' | 'unknown' {
   if (lower.endsWith('.txt') || lower.endsWith('.text')) return 'txt';
   if (lower.endsWith('.doc') || lower.endsWith('.docx')) return 'doc';
   return 'unknown';
+}
+
+// 直接从代理URL下载文件内容
+async function downloadFromProxy(url: string): Promise<Buffer | null> {
+  try {
+    console.log('Downloading from proxy URL...');
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.error('Proxy fetch failed:', response.status, response.statusText);
+      return null;
+    }
+    const arrayBuffer = await response.arrayBuffer();
+    console.log('Downloaded size:', arrayBuffer.byteLength, 'bytes');
+    return Buffer.from(arrayBuffer);
+  } catch (error) {
+    console.error('Proxy download error:', error);
+    return null;
+  }
 }
 
 // 解析文档API
@@ -63,14 +88,25 @@ router.post('/api/parse-document', async (req, res) => {
     console.log('=== Parse document request ===');
     console.log('URL:', url);
 
+    // 从URL中提取文件路径
+    const filePath = extractFilePath(url);
+    if (!filePath) {
+      res.json({
+        success: false,
+        content: '',
+        error: 'Unable to extract file path from URL'
+      });
+      return;
+    }
+
     // 首先尝试使用 FetchClient 解析文档（支持多种格式）
     const customHeaders = HeaderUtils.extractForwardHeaders(req.headers);
     const config = new Config();
     const client = new FetchClient(config, customHeaders);
 
     try {
+      console.log('Trying FetchClient...');
       const response = await client.fetch(url);
-      console.log('FetchClient response status:', response.status_code);
 
       if (response.status_code === 0) {
         // 成功提取到文本内容
@@ -82,101 +118,80 @@ router.post('/api/parse-document', async (req, res) => {
 
         console.log('FetchClient extracted content length:', textContent.length);
 
-        res.json({
-          success: true,
-          title: response.title,
-          content: textContent,
-          url: response.url,
-        });
-        return;
-      }
-    } catch (fetchError) {
-      console.log('FetchClient failed, trying direct file read:', fetchError instanceof Error ? fetchError.message : 'Unknown error');
-    }
-
-    // 如果 FetchClient 失败，尝试直接读取并解析文件
-    const key = extractFileKey(url);
-
-    if (key) {
-      try {
-        console.log('Reading file from storage with key:', key);
-        const fileBuffer = await storage.readFile({ fileKey: key });
-        console.log('File buffer size:', fileBuffer.length, 'bytes');
-
-        // 根据文件扩展名判断文件类型
-        const fileType = getFileType(key);
-        let content = '';
-        
-        switch (fileType) {
-          case 'pdf':
-            console.log('Parsing as PDF...');
-            content = await parsePdfContent(fileBuffer);
-            break;
-          case 'txt':
-            console.log('Parsing as TXT...');
-            // 尝试多种编码
-            content = fileBuffer.toString('utf-8');
-            // 如果内容为空或全是乱码，尝试其他编码
-            if (!content || content.trim().length === 0) {
-              console.log('UTF-8 failed, trying GBK...');
-              try {
-                content = fileBuffer.toString('gbk');
-              } catch {
-                console.log('GBK failed, trying UTF-16...');
-                content = fileBuffer.toString('utf16le');
-              }
-            }
-            break;
-          case 'doc':
-            console.log('Word document parsing not supported yet');
-            res.json({
-              success: false,
-              content: '',
-              error: 'Word document parsing is not supported yet. Please convert to PDF or TXT format.'
-            });
-            return;
-          default:
-            console.log('Unknown file type, treating as text...');
-            // 尝试作为文本读取
-            content = fileBuffer.toString('utf-8');
-        }
-
-        console.log('Extracted content length:', content.length);
-        console.log('Content preview:', content.substring(0, 200));
-
-        if (content && content.trim().length > 0) {
+        if (textContent && textContent.trim().length > 0) {
           res.json({
             success: true,
-            title: '',
-            content: content,
-            url: url,
+            title: response.title,
+            content: textContent,
+            url: response.url,
           });
           return;
-        } else {
-          // 内容为空或解析失败
+        }
+      }
+    } catch (fetchError) {
+      console.log('FetchClient failed:', fetchError instanceof Error ? fetchError.message : 'Unknown error');
+    }
+
+    // 如果 FetchClient 失败，尝试直接从代理URL下载
+    const fileBuffer = await downloadFromProxy(url);
+    
+    if (fileBuffer && fileBuffer.length > 0) {
+      // 根据文件扩展名判断文件类型
+      const fileType = getFileType(filePath);
+      let content = '';
+      
+      switch (fileType) {
+        case 'pdf':
+          console.log('Parsing as PDF...');
+          content = await parsePdfContent(fileBuffer);
+          break;
+        case 'txt':
+          console.log('Parsing as TXT...');
+          // 尝试多种编码
+          content = fileBuffer.toString('utf-8');
+          // 检查是否是有效的文本
+          if (!content || content.trim().length === 0) {
+            console.log('UTF-8 result empty, trying GBK...');
+            try {
+              content = fileBuffer.toString('gbk');
+            } catch {
+              console.log('GBK failed, trying UTF-16...');
+              content = fileBuffer.toString('utf16le');
+            }
+          }
+          break;
+        case 'doc':
+          console.log('Word document parsing not supported yet');
           res.json({
             success: false,
             content: '',
-            error: 'Unable to extract document content. File may be empty, encrypted, or in an unsupported format.'
+            error: 'Word document parsing is not supported yet. Please convert to PDF or TXT format.'
           });
           return;
-        }
-      } catch (readError) {
-        console.error('Read file error:', readError);
+        default:
+          console.log('Unknown file type, treating as text...');
+          content = fileBuffer.toString('utf-8');
+      }
+
+      console.log('Extracted content length:', content.length);
+      console.log('Content preview:', content.substring(0, 300));
+
+      if (content && content.trim().length > 0) {
         res.json({
-          success: false,
-          content: '',
-          error: 'Failed to read file from storage: ' + (readError instanceof Error ? readError.message : 'Unknown error')
+          success: true,
+          title: '',
+          content: content,
+          url: url,
         });
         return;
       }
     }
 
-    // 无法提取key
+    // 无法获取内容
     res.json({
       success: false,
       content: '',
-      error: 'Unable to extract file key from URL'
+      error: 'Unable to extract document content. The file may be empty or in an unsupported format.'
     });
   } catch (error) {
     console.error('Parse document error:', error);
