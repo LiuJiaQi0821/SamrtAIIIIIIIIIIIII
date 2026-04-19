@@ -33,8 +33,17 @@ async function startServer(): Promise<Server> {
   }
 
   // 添加请求体解析 - 支持最大50MB（用于文件上传）
-  app.use(express.json({ limit: '50mb' }));
+  app.use(express.json({ limit: '50mb', verify: (req: any, _res: any, buf: Buffer) => {
+    // 确保请求体使用 UTF-8 编码
+    req.rawBody = buf;
+  }}));
   app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+  
+  // 设置默认字符编码为 UTF-8
+  app.use((_req: express.Request, res: express.Response, next: express.NextFunction) => {
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    next();
+  });
 
   // 注册 API 路由
   app.use(router);
