@@ -126,7 +126,6 @@ const SYSTEM_PROMPT =
 '**【必须遵守】每个JSON数据块必须用单独的 ```json ``` 包裹，且JSON对象之间必须用空行分隔！**\n' +
 '\n' +
 '正确格式示例：\n' +
-'{{HIDDEN_DATA_START}}\n' +
 '```json\n' +
 '{"type":"resume_score","data":{...}}\n' +
 '```\n' +
@@ -138,7 +137,6 @@ const SYSTEM_PROMPT =
 '```json\n' +
 '{"type":"student_profile","data":{...}}\n' +
 '```\n' +
-'{{HIDDEN_DATA_END}}\n' +
 '\n' +
 '**【严格禁止】**\n' +
 '- 禁止把多个JSON放在同一个 code block 中\n' +
