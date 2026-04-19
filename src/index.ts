@@ -1288,54 +1288,42 @@ function createApp() {
       }
 
       // 解析所有隐藏数据并处理
-      const hiddenDataMatch = aiResponse.match(/{{HIDDEN_DATA_START}}([\s\S]*?){{HIDDEN_DATA_END}}/g)
-      console.log('Found hidden data blocks:', hiddenDataMatch?.length || 0)
-      if (hiddenDataMatch) {
-        hiddenDataMatch.forEach((match, index) => {
-          console.log(`Processing hidden block ${index + 1}:`, match.substring(0, 300))
-          // 移除 code block 标记
-          let jsonContent = match
-            .replace(/{{HIDDEN_DATA_START}}/, '')
-            .replace(/{{HIDDEN_DATA_END}}/, '')
-            .replace(/```json\s*/g, '')
-            .replace(/```\s*/g, '')
-            .trim()
-          
-          console.log(`Block ${index + 1} cleaned content length:`, jsonContent.length)
-          
-          // 方法1：尝试分割多个 JSON 对象（用 }\n{ 分隔）
-          const parts = jsonContent.split(/}\s*\n\s*{/)
-          console.log(`Block ${index + 1} split into ${parts.length} parts`)
-          
-          parts.forEach((part, pIdx) => {
-            let jsonStr = part
-            // 第一个加 }，最后一个不加
-            if (pIdx > 0) jsonStr = '{' + jsonStr
-            if (pIdx < parts.length - 1) jsonStr = jsonStr + '}'
-            
-            try {
-              const jsonData = JSON.parse(jsonStr)
-              console.log(`Block ${index + 1}, part ${pIdx + 1} parsed, type:`, jsonData.type)
-              handleProfileData(jsonData)
-            } catch {
-              // 忽略解析失败的单个部分
-            }
-          })
-          
-          // 如果分割后没有成功解析任何 JSON，尝试整体解析
-          const parsedCount = parts.length
-          if (parsedCount === 0 || parsedCount === 1) {
-            try {
-              const jsonData = JSON.parse(jsonContent)
-              console.log(`Direct parse succeeded, type:`, jsonData.type)
-              handleProfileData(jsonData)
-            } catch {
-              // 忽略
-            }
+      // 移除所有 HIDDEN_DATA 标记，提取纯 JSON 内容
+      const cleanResponse = aiResponse
+        .replace(/{{HIDDEN_DATA_START}}/g, '')
+        .replace(/{{HIDDEN_DATA_END}}/g, '')
+        .replace(/```json\s*/g, '')
+        .replace(/```\s*/g, '')
+        .trim()
+      
+      console.log('Cleaned response length:', cleanResponse.length)
+      
+      // 尝试用正则提取所有 JSON 对象
+      const jsonPattern = /\{[\s\S]*?"type"\s*:\s*"(resume_score|ability_analysis|student_profile)"[\s\S]*?\}/g
+      const matches = cleanResponse.match(jsonPattern)
+      
+      if (matches) {
+        console.log(`Found ${matches.length} JSON objects`)
+        matches.forEach((jsonStr, idx) => {
+          try {
+            const jsonData = JSON.parse(jsonStr)
+            console.log(`JSON ${idx + 1} parsed, type:`, jsonData.type)
+            handleProfileData(jsonData)
+          } catch (e) {
+            console.error(`JSON ${idx + 1} parse error:`, e)
           }
         })
       } else {
-        console.log('No hidden data blocks found in response')
+        console.log('No JSON objects found with type pattern')
+        // 备用方案：尝试直接解析整个响应
+        try {
+          const jsonData = JSON.parse(cleanResponse)
+          if (jsonData.type) {
+            handleProfileData(jsonData)
+          }
+        } catch {
+          console.log('Direct parse failed')
+        }
       }
 
       // 只有在正常完成时才保存到历史（如果是中断，内容已经在消息框中了）
