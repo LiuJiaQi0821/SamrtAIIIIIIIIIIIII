@@ -570,6 +570,8 @@ function createApp() {
   let uploadedFileUrl: string | null = null
   let lastResumeContent: string | null = null  // 存储最后一次上传的简历内容
   let pendingManualResumeText: string | null = null  // 存储手动录入的简历文本
+  let hasJsonDataInThisResponse = false  // 标记当前响应中是否包含JSON数据
+  let jsonProcessingMessage: HTMLElement | null = null  // 保存"正在分析中……"消息元素的引用
   
   // 更新左侧卡片显示画像数据（提前定义，供 clearAllResumeData 使用）
   function updateProfileCard(profile: {
