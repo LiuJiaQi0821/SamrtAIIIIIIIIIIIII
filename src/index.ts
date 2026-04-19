@@ -63,9 +63,6 @@ function createApp() {
   }
   currentUpdateCardFn = updateProfileCardWrapper
 
-  // 加载对话历史
-  conversationHistory = loadConversationHistory()
-
   app.innerHTML = `
     <div class="h-screen flex flex-col lg:flex-row overflow-hidden backdrop-blur-sm page-background">
       <!-- 移动端顶部导航 -->
@@ -465,9 +462,6 @@ function createApp() {
   // 保存原始卡片区域的HTML内容
   const originalCardsPanelHTML = cardsPanel?.innerHTML || ''
 
-  // 渲染对话历史
-  renderConversationHistory()
-
   const mobileTitle = document.getElementById('mobile-title')
 
   tabCards?.addEventListener('click', () => {
@@ -568,71 +562,8 @@ function createApp() {
     return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`
   }
 
-  // 对话历史存储键名
-  const CONVERSATION_STORAGE_KEY = 'conversationHistory'
-  
-  // 对话历史类型定义
-  type MessageContent = string | Array<{ type: string; text?: string; image_url?: { url: string } }>
-  type ConversationMessage = { role: string; content: MessageContent }
-  
-  // 保存对话历史 - 支持多模态内容（提前声明，供辅助函数使用）
-  let conversationHistory: ConversationMessage[] = []
-  
-  // 从 localStorage 加载对话历史
-  function loadConversationHistory(): ConversationMessage[] {
-    try {
-      const stored = localStorage.getItem(CONVERSATION_STORAGE_KEY)
-      if (stored) {
-        return JSON.parse(stored)
-      }
-    } catch (error) {
-      console.error('Error loading conversation history:', error)
-    }
-    return []
-  }
-  
-  // 保存对话历史到 localStorage
-  function saveConversationHistory() {
-    try {
-      localStorage.setItem(CONVERSATION_STORAGE_KEY, JSON.stringify(conversationHistory))
-    } catch (error) {
-      console.error('Error saving conversation history:', error)
-    }
-  }
-  
-  // 渲染对话历史到消息容器
-  function renderConversationHistory() {
-    if (!messagesContainer) return
-    
-    // 清空现有消息
-    messagesContainer.innerHTML = ''
-    
-    // 渲染每条历史消息
-    for (const msg of conversationHistory) {
-      if (msg.role === 'user') {
-        const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)
-        // 对于用户消息，如果包含简历内容则简化显示
-        const displayContent = content.length > 500 ? content.substring(0, 500) + '...' : content
-        addMessage(displayContent, true)
-      } else {
-        // AI 消息，需要过滤掉隐藏数据后再显示
-        let content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)
-        // 过滤隐藏数据标记
-        content = content.replace(/{{HIDDEN_DATA_START}}[\s\S]*?{{HIDDEN_DATA_END}}/g, '')
-        // 清理 Markdown 符号
-        content = content
-          .replace(/^[*\-#]+\s*/gm, '')
-          .replace(/\*+/g, '')
-          .replace(/^#+\s*/gm, '')
-          .replace(/^-\s*/gm, '')
-          .trim()
-        if (content) {
-          addMessage(content, false)
-        }
-      }
-    }
-  }
-  
+  // 保存对话历史 - 支持多模态内容
+  let conversationHistory: Array<{ role: string; content: string | Array<{ type: string; text?: string; image_url?: { url: string } }> }> = []
   let uploadedFile: File | null = null
   let uploadedFileUrl: string | null = null
   let lastResumeContent: string | null = null  // 存储最后一次上传的简历内容
@@ -855,9 +786,8 @@ function createApp() {
     localStorage.removeItem('studentProfile')
     // 直接调用卡片更新函数，清除左侧卡片显示
     updateProfileCard({})
-    // 清除对话历史及本地存储
+    // 清除对话历史
     conversationHistory = []
-    localStorage.removeItem(CONVERSATION_STORAGE_KEY)
     // 清除文件相关数据
     uploadedFile = null
     uploadedFileUrl = null
@@ -1193,7 +1123,6 @@ function createApp() {
 
     // 添加用户消息到历史
     conversationHistory.push({ role: 'user', content: messageContent })
-    saveConversationHistory()
 
     // 创建AI消息占位，立即显示"正在分析中……"
     const aiMessageDiv = addMessage('正在分析中……', false)
@@ -1355,7 +1284,6 @@ function createApp() {
           .replace(/{{HIDDEN_DATA_START}}[\s\S]*?{{HIDDEN_DATA_END}}/g, '')
           .trim()
         conversationHistory.push({ role: 'assistant', content: finalResponse })
-        saveConversationHistory()
       }
       isGenerating = false
       userScrolledUp = false  // 输出完成后重置滚动标志
@@ -1367,7 +1295,6 @@ function createApp() {
       // 即使出错，如果有内容也保存到历史
       if (aiResponse) {
         conversationHistory.push({ role: 'assistant', content: aiResponse })
-        saveConversationHistory()
       }
       isGenerating = false
       userScrolledUp = false  // 出错后也重置滚动标志
