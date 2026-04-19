@@ -1130,7 +1130,9 @@ function createApp() {
             messageContent = '【系统提示】系统无法验证您上传的文件 "' + fileName + '" 是否为简历内容。请重新上传一份包含个人信息的简历文件（如姓名、联系方式、教育背景、工作经验、技能描述等），以便我为您进行职业规划分析。'
           }
         }
-      } else if (hasManualResume) {
+      }
+      
+      if (hasManualResume) {
         // 手动录入的简历 - 直接构建确认消息
         const manualResumeContent = pendingManualResumeText!
         lastResumeContent = manualResumeContent  // 保存简历内容供后续确认使用
@@ -1141,8 +1143,10 @@ function createApp() {
         
         // 清除 pendingManualResumeText
         pendingManualResumeText = null
-      } else {
-      // 没有文件时，检查是否为简历确认消息
+      }
+      
+      if (!messageContent) {
+        // 没有文件时，检查是否为简历确认消息
       const trimmedMessage = message.trim().toLowerCase()
       const confirmWords = ['正确', '没问题', '是的', '确认', 'ok', 'yes', 'y', '对', '可以', '好的', '继续', '开始分析', '生成画像', '分析简历']
       const isConfirmMessage = confirmWords.some(word => trimmedMessage.includes(word))
@@ -1159,7 +1163,6 @@ function createApp() {
       } else {
         messageContent = message
       }
-    }
 
     // 添加用户消息到历史
     conversationHistory.push({ role: 'user', content: messageContent })
