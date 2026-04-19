@@ -969,8 +969,15 @@ function createApp() {
   }
 
   async function handleSend() {
+    // 检查是否正在生成中
+    if (isGenerating) {
+      console.log('Already generating, ignoring send')
+      return
+    }
+    
     // 标记为正在生成
     isGenerating = true
+    console.log('handleSend called, isGenerating:', isGenerating)
 
     // 清空文件状态，防止重复发送
     const pendingFile = uploadedFile
@@ -1287,6 +1294,7 @@ function createApp() {
         conversationHistory.push({ role: 'assistant', content: finalResponse })
       }
       isGenerating = false
+      console.log('Generation complete, isGenerating:', isGenerating)
       userScrolledUp = false  // 输出完成后重置滚动标志
     } catch (error) {
       console.error('Chat error:', error)
@@ -1298,6 +1306,7 @@ function createApp() {
         conversationHistory.push({ role: 'assistant', content: aiResponse })
       }
       isGenerating = false
+      console.log('Generation error, isGenerating:', isGenerating)
       userScrolledUp = false  // 出错后也重置滚动标志
     }
 
@@ -1325,10 +1334,12 @@ function createApp() {
 
   // 停止按钮点击事件
   stopBtn?.addEventListener('click', () => {
+    console.log('Stop button clicked')
     if (currentController) {
       currentController.abort()
     }
     isGenerating = false
+    console.log('After stop, isGenerating:', isGenerating)
     userScrolledUp = false  // 停止后重置滚动标志
   })
 
