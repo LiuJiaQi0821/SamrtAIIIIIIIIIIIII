@@ -563,12 +563,13 @@ function createApp() {
     const b = Math.max(0, Math.min(255, (num & 0x0000FF) + amount))
     return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`
   }
-
+  
   // 保存对话历史 - 支持多模态内容
   let conversationHistory: Array<{ role: string; content: string | Array<{ type: string; text?: string; image_url?: { url: string } }> }> = []
   let uploadedFile: File | null = null
   let uploadedFileUrl: string | null = null
   let lastResumeContent: string | null = null  // 存储最后一次上传的简历内容
+  let pendingManualResumeText: string | null = null  // 存储手动录入的简历文本
   
   // 更新左侧卡片显示画像数据（提前定义，供 clearAllResumeData 使用）
   function updateProfileCard(profile: {
@@ -999,7 +1000,10 @@ function createApp() {
     uploadedFileUrl = null
 
     const message = messageInput?.value.trim()
-    if (!message && !pendingFile) {
+    // 检查是否有手动录入的简历
+    const hasManualResume = pendingManualResumeText !== null
+    
+    if (!message && !pendingFile && !hasManualResume) {
       isGenerating = false
       return
     }
@@ -1051,6 +1055,10 @@ function createApp() {
     } else if (message) {
       // 只有文本消息的情况
       addMessage(message, true)
+      messageInput.value = ''
+    } else if (hasManualResume) {
+      // 手动录入的简历，显示简历内容
+      addMessage(pendingManualResumeText, true)
       messageInput.value = ''
     }
 
@@ -1122,6 +1130,17 @@ function createApp() {
             messageContent = '【系统提示】系统无法验证您上传的文件 "' + fileName + '" 是否为简历内容。请重新上传一份包含个人信息的简历文件（如姓名、联系方式、教育背景、工作经验、技能描述等），以便我为您进行职业规划分析。'
           }
         }
+      } else if (hasManualResume) {
+        // 手动录入的简历 - 直接构建确认消息
+        const manualResumeContent = pendingManualResumeText!
+        lastResumeContent = manualResumeContent  // 保存简历内容供后续确认使用
+        
+        // 手动录入的简历直接确认
+        const resumeConfirmMessage = '【简历确认】用户通过手动录入提交了简历，请仔细阅读以下内容，然后：\n1. 展示提取到的全部信息（按原文格式）\n2. 询问用户："以上是我从您的手动录入信息中整理的简历，请问是否正确完整？如果没有问题，我将为您构建学生画像。"\n\n---简历原文内容---\n' + manualResumeContent.substring(0, 10000) + '\n---简历原文结束---'
+        messageContent = resumeConfirmMessage
+        
+        // 清除 pendingManualResumeText
+        pendingManualResumeText = null
       }
     } else {
       // 没有文件时，检查是否为简历确认消息
@@ -1657,15 +1676,23 @@ function createApp() {
     // 生成纯文本简历内容
     const resumeText = generateResumeText()
     
+    // 保存简历文本供 handleSend 使用
+    pendingManualResumeText = resumeText
+    lastResumeContent = resumeText  // 也保存到 lastResumeContent
+    clearProfileData()  // 清除旧画像数据
+    
     // 关闭模态框
     resumeModal?.classList.remove('active')
     document.body.style.overflow = ''
     
-    // 将简历内容显示在消息中
-    addMessage(resumeText, true)
-    
     // 重置表单
     resetForm()
+    
+    // 自动触发发送（模拟用户在输入框输入内容并点击发送）
+    if (messageInput) {
+      messageInput.value = '请分析我的简历'
+    }
+    handleSend()
   })
 
   // 更新步骤UI
