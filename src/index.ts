@@ -1102,8 +1102,9 @@ function createApp() {
       filePreview?.classList.remove('flex')
     }
 
+    // 禁用前端职业期望收集，让AI来处理
     // 如果正在收集职业期望，先处理用户回答
-    if (isCollectingExpectations && message) {
+    if (false && isCollectingExpectations && message) {
       // 立即重置 isGenerating 标志，因为不调用后端API
       isGenerating = false
       
@@ -1614,27 +1615,27 @@ function createApp() {
         
         finalContentToSave = finalResponse
         
-      // 如果有JSON数据，开始收集职业期望
-      if (hasJsonDataInThisResponse) {
-        const intro = '我已经完成了您的简历分析和学生画像构建！现在需要了解您的职业期望，以便为您推荐合适的岗位。'
-        const firstQuestion = `请问：\n\n1. ${expectationQuestions[0]}`
-        const fullQuestion = intro + '\n\n' + firstQuestion
-        
-        if (aiTextElement) {
-          aiTextElement.textContent = fullQuestion
-        }
-        finalContentToSave = fullQuestion
-        
-        // 初始化职业期望收集状态
-        isCollectingExpectations = true
-        currentExpectationQuestion = 0
-        careerExpectations = {}
-      } else {
-        // 更新消息元素内容，移除JSON代码块
-        if (aiTextElement) {
-          aiTextElement.textContent = finalResponse || '分析完成'
-        }
-      }
+        // 禁用前端职业期望收集，让AI来处理
+        // if (hasJsonDataInThisResponse) {
+        //   const intro = '我已经完成了您的简历分析和学生画像构建！现在需要了解您的职业期望，以便为您推荐合适的岗位。'
+        //   const firstQuestion = `请问：\n\n1. ${expectationQuestions[0]}`
+        //   const fullQuestion = intro + '\n\n' + firstQuestion
+        //   
+        //   if (aiTextElement) {
+        //     aiTextElement.textContent = fullQuestion
+        //   }
+        //   finalContentToSave = fullQuestion
+        //   
+        //   // 初始化职业期望收集状态
+        //   isCollectingExpectations = true
+        //   currentExpectationQuestion = 0
+        //   careerExpectations = {}
+        // } else {
+          // 更新消息元素内容，移除JSON代码块
+          if (aiTextElement) {
+            aiTextElement.textContent = finalResponse || '分析完成'
+          }
+        // }
         
         conversationHistory.push({ role: 'assistant', content: finalContentToSave })
       }
