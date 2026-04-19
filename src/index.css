@@ -2598,3 +2598,126 @@ html {
 .compare-item:hover {
   transform: scale(1.05);
 }
+
+/* ========== 人岗匹配度卡片样式 ========== */
+.job-match-card {
+  position: relative;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.95), rgba(232, 244, 252, 0.9), rgba(243, 232, 255, 0.95));
+  border-radius: 20px;
+  padding: 1.25rem;
+  border: 1px solid rgba(167, 139, 250, 0.25);
+  box-shadow: 
+    0 8px 25px rgba(167, 139, 250, 0.15),
+    0 4px 12px rgba(91, 184, 216, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.job-match-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #5BB8D8, #A78BFA, #48C78E);
+}
+
+.job-match-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 
+    0 12px 40px rgba(167, 139, 250, 0.2),
+    0 6px 18px rgba(91, 184, 216, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.job-match-card .card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid rgba(167, 139, 250, 0.15);
+}
+
+.job-match-card .card-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(91, 184, 216, 0.15), rgba(167, 139, 250, 0.15));
+  color: #8B5CF6;
+}
+
+.job-match-card .card-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #1F2937;
+}
+
+.job-match-card .match-score {
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+.job-match-card .match-details {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.job-match-card .match-section {
+  padding: 0.75rem;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.6), rgba(232, 244, 252, 0.4));
+  border-radius: 12px;
+  border: 1px solid rgba(167, 139, 250, 0.1);
+}
+
+.job-match-card .match-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.job-match-card .match-section-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #4B5563;
+}
+
+.job-match-card .match-score-small {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #8B5CF6;
+}
+
+.job-match-card .match-bar {
+  height: 8px;
+  background: rgba(229, 231, 235, 0.8);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.job-match-card .match-bar-fill {
+  height: 100%;
+  border-radius: 10px;
+  transition: width 0.5s ease;
+}
+
+.job-match-card .match-desc {
+  line-height: 1.6;
+}
+
+/* 匹配度卡片悬停效果 */
+.job-match-card .match-section {
+  transition: all 0.3s ease;
+}
+
+.job-match-card .match-section:hover {
+  background: linear-gradient(135deg, rgba(237, 233, 254, 0.4), rgba(232, 244, 252, 0.5));
+  transform: translateX(2px);
+}

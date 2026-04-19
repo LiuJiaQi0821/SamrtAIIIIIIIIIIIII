@@ -571,6 +571,25 @@ function createApp() {
   let lastResumeContent: string | null = null  // 存储最后一次上传的简历内容
   let pendingManualResumeText: string | null = null  // 存储手动录入的简历文本
   let hasJsonDataInThisResponse = false  // 标记当前响应中是否包含JSON数据
+  
+  // 职业期望收集状态
+  interface CareerExpectations {
+    industry?: string
+    jobType?: string
+    city?: string
+    salary?: string
+    other?: string
+  }
+  let careerExpectations: CareerExpectations = {}  // 存储用户回答的职业期望
+  let currentExpectationQuestion = 0  // 当前询问的问题索引 (0-4)
+  const expectationQuestions = [
+    '期望从事的行业（如：互联网、金融、教育、医疗等）',
+    '期望的岗位类型（如：数据分析、产品经理、前端开发、后端开发等）',
+    '期望工作的城市',
+    '期望薪资范围（如：8K-15K/月或面议）',
+    '其他要求'
+  ]
+  let isCollectingExpectations = false  // 是否正在收集职业期望
   let jsonProcessingMessage: HTMLElement | null = null  // 保存"正在分析中……"消息元素的引用
   
   // 更新左侧卡片显示画像数据（提前定义，供 clearAllResumeData 使用）
@@ -578,12 +597,13 @@ function createApp() {
     resumeScore?: any
     abilityAnalysis?: any
     studentProfile?: any
+    jobMatch?: any
   }) {
     const cardsPanel = document.getElementById('cards-panel')
     if (!cardsPanel) return
     
     // 如果没有任何画像数据，恢复默认状态
-    if (!profile.resumeScore && !profile.abilityAnalysis && !profile.studentProfile) {
+    if (!profile.resumeScore && !profile.abilityAnalysis && !profile.studentProfile && !profile.jobMatch) {
       cardsPanel.innerHTML = `
         <div class="h-full flex flex-col">
           <div class="hidden lg:flex items-center px-4 py-3">
@@ -775,6 +795,66 @@ function createApp() {
       html += `
         </div>
       `
+    }
+    
+    // 人岗匹配度卡片
+    if (profile.jobMatch && profile.jobMatch.matches) {
+      const matches = profile.jobMatch.matches
+      
+      matches.forEach((match: any, idx: number) => {
+        const overallColor = match.overall_score >= 80 ? 'text-green-600' : match.overall_score >= 60 ? 'text-amber-600' : 'text-red-600'
+        
+        html += `
+          <div class="job-match-card">
+            <div class="card-header">
+              <div class="card-icon">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                </svg>
+              </div>
+              <div class="flex-1">
+                <h3 class="card-title">${match.job_title}</h3>
+                <p class="text-sm text-gray-500">${match.company}</p>
+              </div>
+              <span class="match-score ${overallColor} text-2xl font-bold">${match.overall_score}%</span>
+            </div>
+            
+            <div class="match-details">
+              <div class="match-section">
+                <div class="match-section-header">
+                  <span class="match-section-title">专业技能契合度</span>
+                  <span class="match-score-small">${match.skill_match?.score || 0}%</span>
+                </div>
+                <div class="match-bar">
+                  <div class="match-bar-fill" style="width: ${match.skill_match?.score || 0}%; background: linear-gradient(90deg, #5BB8D8, #7AD0E8);"></div>
+                </div>
+                <p class="match-desc text-sm text-gray-600 mt-2">${match.skill_match?.analysis || '分析中...'}</p>
+              </div>
+              
+              <div class="match-section">
+                <div class="match-section-header">
+                  <span class="match-section-title">通用素质契合度</span>
+                  <span class="match-score-small">${match.quality_match?.score || 0}%</span>
+                </div>
+                <div class="match-bar">
+                  <div class="match-bar-fill" style="width: ${match.quality_match?.score || 0}%; background: linear-gradient(90deg, #5BB8D8, #7AD0E8);"></div>
+                </div>
+                <p class="match-desc text-sm text-gray-600 mt-2">${match.quality_match?.analysis || '分析中...'}</p>
+              </div>
+              
+              <div class="match-section">
+                <h4 class="match-section-title text-gray-700 font-medium mb-2">差距分析</h4>
+                <p class="match-desc text-sm text-red-600">${match.gaps || '暂无明显差距'}</p>
+              </div>
+              
+              <div class="match-section">
+                <h4 class="match-section-title text-gray-700 font-medium mb-2">改进建议</h4>
+                <p class="match-desc text-sm text-blue-600">${match.suggestions || '继续保持当前优势'}</p>
+              </div>
+            </div>
+          </div>
+        `
+      })
     }
     
     html += `
@@ -1022,6 +1102,108 @@ function createApp() {
       filePreview?.classList.remove('flex')
     }
 
+    // 如果正在收集职业期望，先处理用户回答
+    if (isCollectingExpectations && message) {
+      // 保存用户回答
+      const questionKeys: Array<keyof CareerExpectations> = ['industry', 'jobType', 'city', 'salary', 'other']
+      careerExpectations[questionKeys[currentExpectationQuestion]] = message.trim()
+      
+      // 添加用户消息到界面
+      addMessage(message, true)
+      messageInput.value = ''
+      
+      // 检查是否所有问题都收集完成
+      currentExpectationQuestion++
+      
+      if (currentExpectationQuestion >= expectationQuestions.length) {
+        // 所有问题收集完成，结束收集
+        isCollectingExpectations = false
+        
+        // 创建AI消息占位
+        const aiMessageDiv = addMessage('正在为您匹配岗位……', false)
+        const aiTextElement = aiMessageDiv?.querySelector('.ai-message') as HTMLElement
+        
+        // 隐藏发送按钮，显示停止按钮
+        if (sendBtn) {
+          sendBtn.classList.add('hidden')
+        }
+        if (stopBtn) {
+          stopBtn.classList.remove('hidden')
+        }
+        
+        // 调用人岗匹配分析
+        try {
+          isGenerating = true
+          
+          // 先从 localStorage 获取学生画像
+          const studentProfile = JSON.parse(localStorage.getItem('studentProfile') || '{}')
+          
+          // 构建匹配请求
+          const matchRequest = {
+            expectations: careerExpectations,
+            profile: studentProfile
+          }
+          
+          const response = await fetch('/api/job-match', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(matchRequest)
+          })
+          
+          if (!response.ok) {
+            throw new Error('匹配分析请求失败')
+          }
+          
+          const result = await response.json()
+          
+          // 保存匹配分析结果到 localStorage
+          if (result.analysis) {
+            const existingProfile = JSON.parse(localStorage.getItem('studentProfile') || '{}')
+            existingProfile.jobMatch = result.analysis
+            localStorage.setItem('studentProfile', JSON.stringify(existingProfile))
+            
+            // 更新卡片UI
+            updateProfileCard(existingProfile)
+          }
+          
+          // 显示匹配分析结果
+          if (aiTextElement) {
+            aiTextElement.textContent = result.message || '岗位匹配分析已完成，请查看左侧卡片！'
+          }
+          
+          // 保存到历史
+          conversationHistory.push({ role: 'user', content: message })
+          conversationHistory.push({ role: 'assistant', content: result.message || '岗位匹配分析已完成，请查看左侧卡片！' })
+          
+        } catch (error) {
+          console.error('Job match error:', error)
+          if (aiTextElement) {
+            aiTextElement.textContent = '抱歉，岗位匹配分析出现问题，请稍后重试。'
+          }
+        } finally {
+          isGenerating = false
+          
+          // 恢复发送按钮，隐藏停止按钮
+          if (sendBtn) {
+            sendBtn.classList.remove('hidden')
+            sendBtn.style.opacity = '1'
+            sendBtn.style.pointerEvents = 'auto'
+          }
+          if (stopBtn) {
+            stopBtn.classList.add('hidden')
+          }
+        }
+        
+        return
+      } else {
+        // 还有下一个问题，继续询问
+        const aiMessageDiv = addMessage(`请问：\n\n${currentExpectationQuestion + 1}. ${expectationQuestions[currentExpectationQuestion]}`, false)
+        conversationHistory.push({ role: 'user', content: message })
+        conversationHistory.push({ role: 'assistant', content: `请问：\n\n${currentExpectationQuestion + 1}. ${expectationQuestions[currentExpectationQuestion]}` })
+        return
+      }
+    }
+    
     // 处理文件上传（优先显示）
     let fileUrl: string | null = null
     if (pendingFile) {
@@ -1421,19 +1603,27 @@ function createApp() {
         
         finalContentToSave = finalResponse
         
-        // 如果有JSON数据，替换为职业期望询问
-        if (hasJsonDataInThisResponse) {
-          const careerQuestion = '我已经完成了您的简历分析和学生画像构建！现在需要了解您的职业期望，以便为您推荐合适的岗位。请问：\n\n1. 期望从事的行业（如：互联网、金融、教育、医疗等）'
-          if (aiTextElement) {
-            aiTextElement.textContent = careerQuestion
-          }
-          finalContentToSave = careerQuestion
-        } else {
-          // 更新消息元素内容，移除JSON代码块
-          if (aiTextElement) {
-            aiTextElement.textContent = finalResponse || '分析完成'
-          }
+      // 如果有JSON数据，开始收集职业期望
+      if (hasJsonDataInThisResponse) {
+        const intro = '我已经完成了您的简历分析和学生画像构建！现在需要了解您的职业期望，以便为您推荐合适的岗位。'
+        const firstQuestion = `请问：\n\n1. ${expectationQuestions[0]}`
+        const fullQuestion = intro + '\n\n' + firstQuestion
+        
+        if (aiTextElement) {
+          aiTextElement.textContent = fullQuestion
         }
+        finalContentToSave = fullQuestion
+        
+        // 初始化职业期望收集状态
+        isCollectingExpectations = true
+        currentExpectationQuestion = 0
+        careerExpectations = {}
+      } else {
+        // 更新消息元素内容，移除JSON代码块
+        if (aiTextElement) {
+          aiTextElement.textContent = finalResponse || '分析完成'
+        }
+      }
         
         conversationHistory.push({ role: 'assistant', content: finalContentToSave })
       }

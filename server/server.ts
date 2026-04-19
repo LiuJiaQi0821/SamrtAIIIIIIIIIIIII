@@ -10,6 +10,7 @@ import parseDocumentRouter from './routes/parse-document';
 import validateResumeRouter from './routes/validate-resume';
 import jobsRouter from './routes/jobs';
 import transferPathsRouter from './routes/transfer-paths';
+import jobMatchRouter from './routes/job-match';
 import { setupVite } from './vite';
 
 const isDev = process.env.COZE_PROJECT_ENV !== 'PROD';
@@ -53,6 +54,7 @@ async function startServer(): Promise<Server> {
   app.use(validateResumeRouter);
   app.use(jobsRouter);
   app.use(transferPathsRouter);
+  app.use(jobMatchRouter);
 
   // 集成 Vite（开发模式）或静态文件服务（生产模式）
   await setupVite(app);
