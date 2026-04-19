@@ -1104,6 +1104,15 @@ function createApp() {
 
     // 如果正在收集职业期望，先处理用户回答
     if (isCollectingExpectations && message) {
+      // 立即重置 isGenerating 标志，因为不调用后端API
+      isGenerating = false
+      
+      // 恢复发送按钮
+      if (sendBtn) {
+        sendBtn.style.opacity = '1'
+        sendBtn.style.pointerEvents = 'auto'
+      }
+      
       // 保存用户回答
       const questionKeys: Array<keyof CareerExpectations> = ['industry', 'jobType', 'city', 'salary', 'other']
       careerExpectations[questionKeys[currentExpectationQuestion]] = message.trim()
@@ -1119,6 +1128,9 @@ function createApp() {
         // 所有问题收集完成，结束收集
         isCollectingExpectations = false
         
+        // 重新设置 isGenerating 为 true，因为接下来要调API
+        isGenerating = true
+        
         // 创建AI消息占位
         const aiMessageDiv = addMessage('正在为您匹配岗位……', false)
         const aiTextElement = aiMessageDiv?.querySelector('.ai-message') as HTMLElement
@@ -1133,8 +1145,6 @@ function createApp() {
         
         // 调用人岗匹配分析
         try {
-          isGenerating = true
-          
           // 先从 localStorage 获取学生画像
           const studentProfile = JSON.parse(localStorage.getItem('studentProfile') || '{}')
           
