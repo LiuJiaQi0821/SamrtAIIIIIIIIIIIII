@@ -1022,7 +1022,7 @@ function createApp() {
         console.error('Upload error:', error)
         const errorMessage = error instanceof Error ? error.message : 'Unknown error'
         if (errorMessage === 'EMPTY_FILE') {
-          addMessage('系统: 请勿上传空文件', false)
+          addMessage('系统: 请勿上传空文件', true)
         } else {
           addMessage('⚠️ 文件上传失败: ' + pendingFile?.name, true)
         }
@@ -1032,6 +1032,7 @@ function createApp() {
           sendBtn.style.opacity = '1'
           sendBtn.style.pointerEvents = 'auto'
         }
+        isGenerating = false
         return
       }
     } else if (message) {
@@ -1066,7 +1067,7 @@ function createApp() {
           })
           const parseData = await parseResponse.json()
           console.log('Parse result:', parseData)
-          if (parseData.success && parseData.content) {
+          if (parseData.success && parseData.content && typeof parseData.content === 'string') {
             docContent = parseData.content
             lastResumeContent = docContent  // 保存简历内容供后续确认使用
             console.log('Doc content length:', docContent.length, 'Preview:', docContent.substring(0, 100))
@@ -1115,7 +1116,7 @@ function createApp() {
       const confirmWords = ['正确', '没问题', '是的', '确认', 'ok', 'yes', 'y', '对', '可以', '好的', '继续', '开始分析', '生成画像', '分析简历']
       const isConfirmMessage = confirmWords.some(word => trimmedMessage.includes(word))
       
-      if (isConfirmMessage && lastResumeContent) {
+      if (isConfirmMessage && lastResumeContent && typeof lastResumeContent === 'string') {
         // 用户确认简历，且有保存的简历内容，重新构建包含简历内容的确认消息
         // 清除旧画像数据，确保生成基于新简历的画像（保留对话历史和消息显示）
         clearProfileData()
