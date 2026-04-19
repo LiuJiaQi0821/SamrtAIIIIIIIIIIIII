@@ -12,14 +12,20 @@ let currentUpdateCardFn: ((profile: ProfileData) => void) | null = null
 
 // 处理画像数据的函数 - 直接更新卡片
 function handleProfileData(data: Record<string, unknown>) {
-  if (!data || !data.type || !data.data) return
+  console.log('handleProfileData called with:', JSON.stringify(data).substring(0, 300))
+  if (!data || !data.type || !data.data) {
+    console.log('handleProfileData: missing type or data')
+    return
+  }
   
   const type = data.type as string
   const profileData = data.data
+  console.log('handleProfileData: processing type:', type)
   
   // 存储画像数据到 localStorage
   try {
     const existingProfile: ProfileData = JSON.parse(localStorage.getItem('studentProfile') || '{}')
+    console.log('Existing profile keys:', Object.keys(existingProfile))
     
     if (type === 'resume_score') {
       existingProfile.resumeScore = profileData
@@ -27,14 +33,21 @@ function handleProfileData(data: Record<string, unknown>) {
       existingProfile.abilityAnalysis = profileData
     } else if (type === 'student_profile') {
       existingProfile.studentProfile = profileData
+    } else {
+      console.log('handleProfileData: unknown type:', type)
     }
+    
+    console.log('Updated profile keys:', Object.keys(existingProfile))
     
     // 保存到 localStorage
     localStorage.setItem('studentProfile', JSON.stringify(existingProfile))
     
     // 直接调用卡片更新函数（立即刷新）
     if (currentUpdateCardFn) {
+      console.log('Calling updateProfileCardFn...')
       currentUpdateCardFn(existingProfile)
+    } else {
+      console.log('currentUpdateCardFn is null!')
     }
   } catch (error) {
     console.error('Error handling profile data:', error)
@@ -1276,19 +1289,27 @@ function createApp() {
 
       // 解析所有隐藏数据并处理
       const hiddenDataMatch = aiResponse.match(/{{HIDDEN_DATA_START}}([\s\S]*?){{HIDDEN_DATA_END}}/g)
+      console.log('Found hidden data blocks:', hiddenDataMatch?.length || 0)
       if (hiddenDataMatch) {
-        hiddenDataMatch.forEach(match => {
+        hiddenDataMatch.forEach((match, index) => {
+          console.log(`Processing hidden block ${index + 1}:`, match.substring(0, 200))
           const jsonContent = match.replace(/{{HIDDEN_DATA_START}}/, '').replace(/{{HIDDEN_DATA_END}}/, '').trim()
           try {
             const jsonMatch = jsonContent.match(/```json\s*([\s\S]*?)```/)
             if (jsonMatch) {
+              console.log(`Block ${index + 1} JSON found, parsing...`)
               const jsonData = JSON.parse(jsonMatch[1])
+              console.log(`Block ${index + 1} parsed successfully, type:`, jsonData.type)
               handleProfileData(jsonData)
+            } else {
+              console.log(`Block ${index + 1}: No JSON found in content`)
             }
-          } catch {
-            // 忽略解析错误
+          } catch (e) {
+            console.error(`Block ${index + 1} parse error:`, e)
           }
         })
+      } else {
+        console.log('No hidden data blocks found in response')
       }
 
       // 只有在正常完成时才保存到历史（如果是中断，内容已经在消息框中了）
