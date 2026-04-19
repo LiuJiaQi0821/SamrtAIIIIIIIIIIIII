@@ -41,17 +41,6 @@ function handleProfileData(data: Record<string, unknown>) {
   }
 }
 
-// 清除画像数据（新上传简历时调用）
-function clearProfileData() {
-  localStorage.removeItem('studentProfile')
-  // 直接调用卡片更新函数清空卡片
-  if (currentUpdateCardFn) {
-    currentUpdateCardFn({})
-  }
-}
-
-
-
 // 左右分栏布局 - 左边卡片展示，右边对话界面
 function createApp() {
   const app = document.getElementById('app')
@@ -806,6 +795,16 @@ function createApp() {
     }
   }
   
+  // 仅清除画像数据（发送消息时调用，保留对话历史和消息显示）
+  function clearProfileData() {
+    // 清除 localStorage 中的画像数据
+    localStorage.removeItem('studentProfile')
+    // 直接调用卡片更新函数，清除左侧卡片显示
+    updateProfileCard({})
+    // 清除简历内容缓存
+    lastResumeContent = null
+  }
+  
   // 保留旧函数名作为别名（兼容）
   const clearConversationHistory = clearAllResumeData
 
@@ -1049,9 +1048,8 @@ function createApp() {
         // 文档消息 - 先解析文档内容，再验证是否为简历
         let docContent = ''
         
-        // 清除旧画像数据和对话历史，确保新简历生成新画像
+        // 清除旧画像数据，确保新简历生成新画像（保留对话历史和消息显示）
         clearProfileData()
-        clearConversationHistory()
         
         try {
           const parseResponse = await fetch('/api/parse-document', {
@@ -1108,9 +1106,8 @@ function createApp() {
       
       if (isConfirmMessage && lastResumeContent) {
         // 用户确认简历，且有保存的简历内容，重新构建包含简历内容的确认消息
-        // 清除旧画像数据和对话历史，确保生成基于新简历的画像
+        // 清除旧画像数据，确保生成基于新简历的画像（保留对话历史和消息显示）
         clearProfileData()
-        clearConversationHistory()
         
         const resumeConfirmMessage = '【简历确认】用户已确认简历信息正确。请立即根据以下简历内容生成学生画像（包括简历评分、能力拆解、学生画像），严格按照JSON格式输出，不要只说"好的"或简单确认。\n\n---简历原文内容---\n' + lastResumeContent.substring(0, 10000) + '\n---简历原文结束---'
         messageContent = resumeConfirmMessage
