@@ -92,32 +92,112 @@ router.post('/api/job-match', async (req, res) => {
       return res.status(500).json({ success: false, error: '数据库未配置' });
     }
     
-    // 1. 先搜索符合条件的岗位
-    let searchFilters: Record<string, string> = {};
+    // 记录用户原始的筛选条件，用于后续提示
+    const originalFilters: string[] = [];
+    if (expectations.industry) originalFilters.push(`行业: ${expectations.industry}`);
+    if (expectations.jobType) originalFilters.push(`岗位类型: ${expectations.jobType}`);
+    if (expectations.city) originalFilters.push(`城市: ${expectations.city}`);
+    if (expectations.salary) originalFilters.push(`薪资: ${expectations.salary}`);
+    if (expectations.other) originalFilters.push(`其他要求: ${expectations.other}`);
     
-    if (expectations.industry) {
-      searchFilters.industry = expectations.industry;
+    console.log('用户原始筛选条件:', originalFilters);
+    
+    // 逐步放宽条件的搜索策略
+    const searchStrategies = [
+      // 策略1: 使用所有条件
+      { 
+        filters: { 
+          industry: expectations.industry, 
+          keyword: expectations.jobType, 
+          location: expectations.city 
+        },
+        droppedConditions: []
+      },
+      // 策略2: 去掉薪资要求
+      { 
+        filters: { 
+          industry: expectations.industry, 
+          keyword: expectations.jobType, 
+          location: expectations.city 
+        },
+        droppedConditions: ['薪资']
+      },
+      // 策略3: 去掉其他要求 + 薪资
+      { 
+        filters: { 
+          industry: expectations.industry, 
+          keyword: expectations.jobType, 
+          location: expectations.city 
+        },
+        droppedConditions: ['其他要求', '薪资']
+      },
+      // 策略4: 去掉城市
+      { 
+        filters: { 
+          industry: expectations.industry, 
+          keyword: expectations.jobType 
+        },
+        droppedConditions: ['城市', '其他要求', '薪资']
+      },
+      // 策略5: 去掉岗位类型
+      { 
+        filters: { 
+          industry: expectations.industry 
+        },
+        droppedConditions: ['岗位类型', '城市', '其他要求', '薪资']
+      },
+      // 策略6: 去掉行业（只基于学生画像匹配）
+      { 
+        filters: {},
+        droppedConditions: ['行业', '岗位类型', '城市', '其他要求', '薪资']
+      }
+    ];
+    
+    let matchedJobs: any[] = [];
+    let finalDroppedConditions: string[] = [];
+    
+    // 逐个尝试搜索策略
+    for (const strategy of searchStrategies) {
+      console.log('尝试搜索策略, 已放宽条件:', strategy.droppedConditions);
+      
+      // 清理空的筛选条件
+      const searchFilters: Record<string, string> = {};
+      Object.entries(strategy.filters).forEach(([key, value]) => {
+        if (value) searchFilters[key] = value;
+      });
+      
+      console.log('当前搜索条件:', searchFilters);
+      
+      // 调用岗位搜索API
+      const searchResponse = await fetch('http://localhost:5000/api/jobs/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(searchFilters)
+      });
+      
+      const searchData = await searchResponse.json();
+      const jobs = searchData.jobs || [];
+      
+      if (jobs.length > 0) {
+        matchedJobs = jobs.slice(0, 5);
+        finalDroppedConditions = strategy.droppedConditions;
+        console.log(`找到 ${matchedJobs.length} 个岗位，已放宽条件:`, finalDroppedConditions);
+        break;
+      }
     }
-    if (expectations.jobType) {
-      searchFilters.keyword = expectations.jobType;
+    
+    // 构建提示信息
+    let friendlyMessage = '';
+    if (finalDroppedConditions.length === 0) {
+      friendlyMessage = '岗位匹配分析已完成！为您找到了5个最匹配的岗位，请查看左侧卡片了解详细分析结果。';
+    } else if (finalDroppedConditions.length < 5) {
+      friendlyMessage = `为了给您找到合适的岗位，我们放宽了以下条件：${finalDroppedConditions.join('、')}。以下是基于您的学生画像推荐的岗位，请查看左侧卡片！`;
+    } else {
+      friendlyMessage = `抱歉，根据您的具体条件暂时没有找到匹配岗位。我们已基于您的简历背景为您推荐了以下岗位，放宽了条件：${finalDroppedConditions.join('、')}。请查看左侧卡片！`;
     }
-    if (expectations.city) {
-      searchFilters.location = expectations.city;
-    }
     
-    console.log('岗位搜索条件:', searchFilters);
-    
-    // 调用岗位搜索API
-    const searchResponse = await fetch('http://localhost:5000/api/jobs/search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(searchFilters)
-    });
-    
-    const searchData = await searchResponse.json();
-    const matchedJobs = searchData.jobs?.slice(0, 5) || [];  // 取前5个岗位
-    
-    console.log(`找到 ${matchedJobs.length} 个匹配岗位`);
+    console.log('最终匹配岗位数:', matchedJobs.length);
+    console.log('最终提示语:', friendlyMessage);
     
     // 2. 调用AI进行匹配度分析
     let matchAnalysis = null;
@@ -222,15 +302,7 @@ ${jobsSummary}
 - key_gaps 中的差距项需要在前端高亮显示
 - 权重必须根据岗位特点自适应调整
 - overall_score 是加权总分：(basic_score×basic_weight + skill_score×skill_weight + quality_score×quality_weight + potential_score×potential_weight) / 100
-
-然后输出一句友好的提示语（单独一行，不含JSON）：
-"岗位匹配分析已完成！为您找到了5个最匹配的岗位，请查看左侧卡片了解详细分析结果。"
-
-【重要警告】
-- **严禁**输出任何表格
-- **严禁**输出"岗位名称 | 所属行业 | ..."这类内容
-- **严禁**输出Markdown格式的列表
-- 只输出JSON代码块 + 一句友好提示语
+- **不要输出任何友好提示语，只输出JSON代码块**
 `;
 
       try {
@@ -284,14 +356,13 @@ ${jobsSummary}
             }
           }
           
-          // 提取友好提示语
+          // 提取友好提示语 - 使用我们自定义的 friendlyMessage
           const messageMatch = aiResponse.replace(/```json[\s\S]*?```/g, '').trim();
-          const friendlyMessage = messageMatch || '岗位匹配分析已完成！请查看左侧卡片了解详细结果。';
           
           // 保存分析结果到localStorage（通过前端完成，后端只返回数据）
           res.json({
             success: true,
-            message: friendlyMessage,
+            message: friendlyMessage,  // 使用我们自定义的友好提示语
             analysis: matchAnalysis,
             jobs: matchedJobs
           });
@@ -303,12 +374,10 @@ ${jobsSummary}
       }
     }
     
-    // 如果没有AI分析结果，返回基本信息
+    // 如果没有AI分析结果，返回基本信息（使用我们的friendlyMessage）
     res.json({
       success: true,
-      message: matchedJobs.length > 0 
-        ? `已为您找到 ${matchedJobs.length} 个相关岗位！`
-        : '暂未找到完全匹配的岗位，建议调整筛选条件。',
+      message: friendlyMessage,
       jobs: matchedJobs
     });
     
