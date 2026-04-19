@@ -15,11 +15,13 @@
     "dotenv": "^17.2.3",
     "es-object-atoms": "^1.1.1",
     "express": "^4.21.2",
+    "pdf-parse": "^2.4.5",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/express": "^5.0.0",
     "@types/node": "^22.10.5",
+    "@types/pdf-parse": "^1.1.5",
     "autoprefixer": "^10.4.20",
     "coze-coding-dev-sdk": "^0.7.20",
     "esbuild": "^0.24.2",
