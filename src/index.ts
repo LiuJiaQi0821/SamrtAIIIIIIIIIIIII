@@ -1058,11 +1058,9 @@ function createApp() {
             body: JSON.stringify({ url: fileUrl }),
           })
           const parseData = await parseResponse.json()
-          console.log('Parse result:', parseData)
           if (parseData.success && parseData.content) {
             docContent = parseData.content
             lastResumeContent = docContent  // 保存简历内容供后续确认使用
-            console.log('Doc content length:', docContent.length, 'Preview:', docContent.substring(0, 100))
           }
         } catch (parseError) {
           console.error('Parse document error:', parseError)
@@ -1076,7 +1074,6 @@ function createApp() {
           messageContent = `用户上传了文件（文件名：${fileName}），但无法自动提取文件内容。请告诉用户您收到了文件，并询问用户能否手动描述文件的主要内容或关键信息，以便进行职业规划分析。`
         } else {
           // 验证是否为简历
-          console.log('Validating docContent, length:', docContent.length)
           try {
             const validateResponse = await fetch('/api/validate-resume', {
               method: 'POST',
@@ -1084,7 +1081,6 @@ function createApp() {
               body: JSON.stringify({ content: docContent }),
             })
             const validateData = await validateResponse.json()
-            console.log('Validate result:', validateData)
             
             // 只有当验证成功且明确判定为简历时才展示内容
             if (validateData.success === true && validateData.isResume === true) {
