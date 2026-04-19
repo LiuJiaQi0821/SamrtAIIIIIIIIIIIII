@@ -590,6 +590,7 @@ function createApp() {
     '其他要求'
   ]
   let isCollectingExpectations = false  // 是否正在收集职业期望
+  let isAIAskingExpectations = false  // AI是否正在询问职业期望问题
   let jsonProcessingMessage: HTMLElement | null = null  // 保存"正在分析中……"消息元素的引用
   
   // 更新左侧卡片显示画像数据（提前定义，供 clearAllResumeData 使用）
@@ -1151,6 +1152,117 @@ function createApp() {
     div.textContent = text
     return div.innerHTML
   }
+
+  // ========== 从对话历史提取职业期望并调用岗位匹配 ==========
+  async function extractAndCallJobMatch() {
+    console.log('开始从对话历史提取职业期望...')
+    
+    // 从对话历史中提取用户消息（跳过系统消息，只取用户回答）
+    const userMessages = conversationHistory
+      .filter(msg => msg.role === 'user')
+      .map(msg => msg.content)
+    
+    console.log('找到用户消息数量:', userMessages.length)
+    
+    // 假设用户最后5个消息是对职业期望问题的回答
+    // 实际上需要更智能的判断，但先简单处理
+    const recentAnswers = userMessages.slice(-5)
+    console.log('提取的回答:', recentAnswers)
+    
+    // 构建职业期望对象
+    const questionKeys: Array<keyof CareerExpectations> = ['industry', 'jobType', 'city', 'salary', 'other']
+    const expectations: CareerExpectations = {}
+    
+    recentAnswers.forEach((answer, idx) => {
+      if (idx < questionKeys.length && answer) {
+        expectations[questionKeys[idx]] = answer
+      }
+    })
+    
+    console.log('构建的职业期望:', expectations)
+    
+    // 只有当我们有至少一些回答时才调用
+    if (Object.keys(expectations).length > 0) {
+      // 显示正在匹配的消息
+      const aiMessageDiv = addMessage('正在为您匹配岗位……', false)
+      const aiTextElement = aiMessageDiv?.querySelector('.ai-message') as HTMLElement
+      
+      // 隐藏发送按钮，显示停止按钮
+      if (sendBtn) {
+        sendBtn.classList.add('hidden')
+      }
+      if (stopBtn) {
+        stopBtn.classList.remove('hidden')
+      }
+      
+      try {
+        isGenerating = true
+        
+        // 先从 localStorage 获取学生画像
+        const studentProfile = JSON.parse(localStorage.getItem('studentProfile') || '{}')
+        
+        // 构建匹配请求
+        const matchRequest = {
+          expectations: expectations,
+          profile: studentProfile
+        }
+        
+        console.log('调用岗位匹配API...')
+        const response = await fetch('/api/job-match', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(matchRequest)
+        })
+        
+        if (!response.ok) {
+          throw new Error('匹配分析请求失败')
+        }
+        
+        const result = await response.json()
+        console.log('岗位匹配API返回:', result.success ? '成功' : '失败')
+        
+        // 保存匹配分析结果到 localStorage
+        if (result.analysis) {
+          const existingProfile = JSON.parse(localStorage.getItem('studentProfile') || '{}')
+          existingProfile.jobMatch = result.analysis
+          localStorage.setItem('studentProfile', JSON.stringify(existingProfile))
+          
+          // 更新卡片UI
+          updateProfileCard(existingProfile)
+        }
+        
+        // 显示匹配分析结果
+        if (aiTextElement) {
+          aiTextElement.textContent = result.message || '岗位匹配分析已完成，请查看左侧卡片！'
+        }
+        
+        // 保存到历史
+        conversationHistory.push({ role: 'assistant', content: result.message || '岗位匹配分析已完成，请查看左侧卡片！' })
+        
+      } catch (error) {
+        console.error('Job match error:', error)
+        if (aiTextElement) {
+          aiTextElement.textContent = '抱歉，岗位匹配分析出现问题，请稍后重试。'
+        }
+      } finally {
+        isGenerating = false
+        isAIAskingExpectations = false
+        
+        // 恢复发送按钮，隐藏停止按钮
+        if (sendBtn) {
+          sendBtn.classList.remove('hidden')
+          sendBtn.style.opacity = '1'
+          sendBtn.style.pointerEvents = 'auto'
+        }
+        if (stopBtn) {
+          stopBtn.classList.add('hidden')
+        }
+      }
+    } else {
+      console.log('没有提取到足够的职业期望回答')
+    }
+  }
+  // ============================================================
 
   async function handleSend() {
     // 检查是否正在生成中
@@ -1728,6 +1840,29 @@ function createApp() {
         
         conversationHistory.push({ role: 'assistant', content: finalContentToSave })
       }
+      
+      // ========== 检测AI职业期望问题收集状态 ==========
+      if (finalContentToSave) {
+        // 检测AI是否开始问职业期望问题
+        if (finalContentToSave.includes('期望从事的行业') || 
+            finalContentToSave.includes('职业期望')) {
+          console.log('AI开始询问职业期望问题')
+          isAIAskingExpectations = true
+          currentExpectationQuestion = 0
+          careerExpectations = {}
+        }
+        
+        // 检测AI是否完成所有问题（说感谢的话）
+        if (finalContentToSave.includes('太感谢您的耐心配合') || 
+            finalContentToSave.includes('为您匹配岗位') ||
+            finalContentToSave.includes('请稍等片刻')) {
+          console.log('AI完成问题收集，开始提取用户回答并调用岗位匹配')
+          
+          // 从对话历史中提取用户的5个回答
+          extractAndCallJobMatch()
+        }
+      }
+      // ==================================================
       
       // 重置标志
       hasJsonDataInThisResponse = false
