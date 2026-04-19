@@ -1288,43 +1288,89 @@ function createApp() {
       }
 
       // 解析所有隐藏数据并处理
-      // 移除所有 HIDDEN_DATA 标记，提取纯 JSON 内容
-      const cleanResponse = aiResponse
-        .replace(/{{HIDDEN_DATA_START}}/g, '')
-        .replace(/{{HIDDEN_DATA_END}}/g, '')
-        .replace(/```json\s*/g, '')
-        .replace(/```\s*/g, '')
-        .trim()
+      // 方法：先提取所有 ```json ... ``` 块，然后按换行或 } { 分割成独立JSON
+      const codeBlockPattern = /```json\s*([\s\S]*?)```/g
+      const codeBlocks: string[] = []
+      let match
       
-      console.log('Cleaned response length:', cleanResponse.length)
+      while ((match = codeBlockPattern.exec(aiResponse)) !== null) {
+        codeBlocks.push(match[1])
+      }
+      console.log(`Found ${codeBlocks.length} code blocks`)
       
-      // 尝试用正则提取所有 JSON 对象
-      const jsonPattern = /\{[\s\S]*?"type"\s*:\s*"(resume_score|ability_analysis|student_profile)"[\s\S]*?\}/g
-      const matches = cleanResponse.match(jsonPattern)
-      
-      if (matches) {
-        console.log(`Found ${matches.length} JSON objects`)
-        matches.forEach((jsonStr, idx) => {
+      codeBlocks.forEach((blockContent, blockIdx) => {
+        console.log(`Processing code block ${blockIdx + 1}, length:`, blockContent.length)
+        
+        // 清理可能残留的 HIDDEN_DATA 标记
+        const cleanContent = blockContent
+          .replace(/{{HIDDEN_DATA_START}}/g, '')
+          .replace(/{{HIDDEN_DATA_END}}/g, '')
+          .trim()
+        
+        // 方法1：按 } 后面跟 { 分割（多个JSON紧挨着）
+        const jsonParts = cleanContent.split(/(?=\}\s*\{)/)
+        
+        // 方法2：如果分割后只有1个，可能是用换行分隔
+        if (jsonParts.length === 1) {
+          // 尝试按换行分割
+          const lines = cleanContent.split(/\n/)
+          // 过滤掉空行，重新组合
+          const nonEmptyLines = lines.filter(l => l.trim())
+          if (nonEmptyLines.length > 1) {
+            // 按行组合成独立JSON
+            const lineParts: string[] = []
+            let current = ''
+            nonEmptyLines.forEach(line => {
+              current += line.trim()
+              // 尝试解析当前组合
+              try {
+                JSON.parse(current)
+                lineParts.push(current)
+                current = ''
+              } catch {
+                // 还不是完整JSON，继续添加
+              }
+            })
+            if (lineParts.length > 0) {
+              jsonParts.length = 0
+              jsonParts.push(...lineParts)
+            }
+          }
+        }
+        
+        console.log(`Block ${blockIdx + 1} split into ${jsonParts.length} parts`)
+        
+        jsonParts.forEach((part, partIdx) => {
+          const trimmedPart = part.trim()
+          if (!trimmedPart) return
+          
+          let jsonStr = trimmedPart
+          // 如果不是以 { 开头，添加 {
+          if (!jsonStr.startsWith('{')) jsonStr = '{' + jsonStr
+          // 如果不是以 } 结尾，添加 }
+          if (!jsonStr.endsWith('}')) jsonStr = jsonStr + '}'
+          
           try {
             const jsonData = JSON.parse(jsonStr)
-            console.log(`JSON ${idx + 1} parsed, type:`, jsonData.type)
-            handleProfileData(jsonData)
+            if (jsonData.type) {
+              console.log(`Block ${blockIdx + 1}, part ${partIdx + 1} parsed, type:`, jsonData.type)
+              handleProfileData(jsonData)
+            }
           } catch (e) {
-            console.error(`JSON ${idx + 1} parse error:`, e)
+            // 如果带括号解析失败，尝试不带括号
+            try {
+              const simpleStr = trimmedPart.replace(/^\{/, '').replace(/\}$/, '')
+              const jsonData = JSON.parse('{' + simpleStr + '}')
+              if (jsonData.type) {
+                console.log(`Block ${blockIdx + 1}, part ${partIdx + 1} parsed (alt), type:`, jsonData.type)
+                handleProfileData(jsonData)
+              }
+            } catch {
+              // 忽略无法解析的部分
+            }
           }
         })
-      } else {
-        console.log('No JSON objects found with type pattern')
-        // 备用方案：尝试直接解析整个响应
-        try {
-          const jsonData = JSON.parse(cleanResponse)
-          if (jsonData.type) {
-            handleProfileData(jsonData)
-          }
-        } catch {
-          console.log('Direct parse failed')
-        }
-      }
+      })
 
       // 只有在正常完成时才保存到历史（如果是中断，内容已经在消息框中了）
       // 保存时也要移除隐藏数据
