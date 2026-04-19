@@ -54,109 +54,79 @@ function getFileType(filename: string): 'pdf' | 'txt' | 'doc' | 'unknown' {
   return 'unknown';
 }
 
-// 检测文本编码并正确解码
-function decodeText(buffer: Buffer): string {
-  // 首先尝试检测 BOM (Byte Order Mark)
-  if (buffer.length >= 3 && buffer[0] === 0xEF && buffer[1] === 0xBB && buffer[2] === 0xBF) {
-    // UTF-8 with BOM
-    return buffer.toString('utf8').substring(1);
-  }
-  if (buffer.length >= 2) {
-    if (buffer[0] === 0xFF && buffer[1] === 0xFE) {
-      // UTF-16 LE
-      return buffer.toString('utf16le').substring(1);
-    }
-    if (buffer[0] === 0xFE && buffer[1] === 0xFF) {
-      // UTF-16 BE
-      return swapBytes(buffer).toString('utf16le').substring(1);
-    }
+// 修复双重编码问题（UTF-8 字节被当作 Latin-1 解码）
+function fixUtf8DoubleEncoding(text: string): string {
+  // 检查是否包含可能是双重编码的字符
+  // UTF-8 字符在 Latin-1 解码后会显示为特殊字符序列
+  const hasDoubleEncoding = /[\u00e3\u00c3\u00a0-\u00ff]/.test(text);
+  
+  if (!hasDoubleEncoding) {
+    return text;
   }
   
-  // 尝试 UTF-8
-  const utf8Str = buffer.toString('utf8');
-  
-  // 检查是否包含无效的 UTF-8 序列
-  const hasUtf8Invalid = /[\uFFFD]/.test(utf8Str);
-  
-  // 如果 UTF-8 解码后包含合理的简历关键词，认为是有效的 UTF-8
-  const hasChineseChars = /[\u4e00-\u9fa5]/.test(utf8Str);
-  
-  if (hasChineseChars && !hasUtf8Invalid) {
-    return utf8Str;
-  }
-  
-  // 尝试 GBK/GB2312（Windows 中文环境常用）
+  // 将字符串的每个字符转换为字节，然后重新按 UTF-8 解码
   try {
-    // 检查是否可能是 GBK 编码
-    const isLikelyGbk = !hasChineseChars && buffer.some(b => b > 0x7F);
-    if (isLikelyGbk) {
-      // 使用 iconv-lite 或手动转换
-      const gbkStr = decodeGbk(buffer);
-      if (/[\u4e00-\u9fa5]/.test(gbkStr)) {
-        return gbkStr;
-      }
+    // 将 JavaScript 字符串（UTF-16）转换为字节数组（Latin-1 视角）
+    const bytes: number[] = [];
+    for (let i = 0; i < text.length; i++) {
+      bytes.push(text.charCodeAt(i) & 0xFF);
+    }
+    
+    // 将字节数组转换回 Buffer 并按 UTF-8 解码
+    const buffer = Buffer.from(bytes);
+    const fixed = buffer.toString('utf-8');
+    
+    // 检查修复后是否包含有效的中文字符
+    const hasChinese = /[\u4e00-\u9fa5]/.test(fixed);
+    
+    if (hasChinese) {
+      console.log('Fixed double encoding, Chinese chars found');
+      return fixed;
     }
   } catch (e) {
-    // 忽略 GBK 解码错误
+    console.error('Fix double encoding failed:', e);
   }
   
-  return utf8Str;
+  return text;
 }
 
-// 简单的 GBK 解码（针对中文 Windows 文本文件）
-function decodeGbk(buffer: Buffer): string {
-  const result: string[] = [];
-  let i = 0;
+// 检测并修复编码问题
+function fixEncoding(text: string): string {
+  // 首先检查是否是双重编码
+  const fixed = fixUtf8DoubleEncoding(text);
   
-  while (i < buffer.length) {
-    const byte = buffer[i];
-    
-    if (byte < 0x80) {
-      // ASCII
-      result.push(String.fromCharCode(byte));
-      i++;
-    } else if (byte >= 0x81 && byte <= 0xFE && i + 1 < buffer.length) {
-      // GBK 双字节
-      const high = byte;
-      const low = buffer[i + 1];
-      
-      if (low >= 0x40 && low <= 0xFE && low !== 0x7F) {
-        // 计算 GBK 编码的 Unicode 码点
-        const gbkIndex = (high - 0x81) * 0xBF + (low - 0x40);
-        
-        // GBK 到 Unicode 映射表（常用汉字部分）
-        const gbkToUnicode = getGbkToUnicodeTable();
-        
-        if (gbkIndex in gbkToUnicode) {
-          result.push(String.fromCodePoint(gbkToUnicode[gbkIndex]));
-        } else {
-          // 如果不在常用表中，尝试用替代字符
-          result.push('?');
-        }
-        i += 2;
-      } else {
-        result.push(String.fromCharCode(byte));
-        i++;
+  // 检查是否包含有效的中文字符
+  const hasChinese = /[\u4e00-\u9fa5]/.test(fixed);
+  
+  if (hasChinese) {
+    return fixed;
+  }
+  
+  // 如果没有中文，尝试其他修复方法
+  // 检查是否包含乱码特征
+  const hasGarbledChars = /[\uFFFD]/.test(fixed);
+  const hasLatinExtended = /[\u0080-\u00FF]/.test(fixed);
+  
+  if (hasGarbledChars || (hasLatinExtended && !hasChinese)) {
+    // 尝试将字符串按 Latin-1 解码为字节，再按 UTF-8 重新解码
+    try {
+      const bytes: number[] = [];
+      for (let i = 0; i < text.length; i++) {
+        bytes.push(text.charCodeAt(i) & 0xFF);
       }
-    } else {
-      result.push(String.fromCharCode(byte));
-      i++;
+      const buffer = Buffer.from(bytes);
+      const result = buffer.toString('utf-8');
+      
+      if (/[\u4e00-\u9fa5]/.test(result)) {
+        console.log('Applied Latin-1 -> UTF-8 fix');
+        return result;
+      }
+    } catch (e) {
+      // 忽略
     }
   }
   
-  return result.join('');
-}
-
-// 获取简化的 GBK 到 Unicode 映射表（常用汉字）
-function getGbkToUnicodeTable(): Record<number, number> {
-  // 这是一个简化的映射表，包含最常用的汉字
-  // 实际生产环境应该使用完整的映射表
-  const table: Record<number, number> = {};
-  
-  // 常用汉字 Unicode 范围
-  // GBK 编码中第一个字节 0xB0-0xF7，第二个字节 0xA1-0xFE
-  // 这里我们使用一个简化的方法：直接尝试 UTF-8 重新编码
-  return table;
+  return fixed;
 }
 
 // 直接从代理URL下载文件内容
@@ -208,16 +178,21 @@ router.post('/api/parse-document', async (req, res) => {
       console.log('FetchClient status:', response.status_code);
 
       if (response.status_code === 0) {
-        const textContent = response.content
+        let textContent = response.content
           .filter(item => item.type === 'text')
           .map(item => item.text)
           .join('\n')
           .trim();
 
-        console.log('FetchClient content length:', textContent.length);
+        console.log('FetchClient raw content length:', textContent.length);
+        
+        // 修复编码问题
+        textContent = fixEncoding(textContent);
+        
+        console.log('FetchClient content length after fix:', textContent.length);
         console.log('FetchClient content preview:', textContent.substring(0, 100));
 
-        if (textContent && textContent.trim().length > 0) {
+        if (textContent && textContent.trim().length > 0 && /[\u4e00-\u9fa5]/.test(textContent)) {
           res.json({
             success: true,
             title: response.title,
@@ -252,7 +227,8 @@ router.post('/api/parse-document', async (req, res) => {
       case 'txt':
       case 'unknown':
       default:
-        content = decodeText(fileBuffer);
+        // 尝试检测文件编码
+        content = detectAndDecode(fileBuffer);
         break;
     }
 
@@ -277,5 +253,31 @@ router.post('/api/parse-document', async (req, res) => {
     res.status(500).json({ error: 'Failed to parse document' });
   }
 });
+
+// 检测并解码文件内容
+function detectAndDecode(buffer: Buffer): string {
+  // 检查 BOM
+  if (buffer.length >= 3 && buffer[0] === 0xEF && buffer[1] === 0xBB && buffer[2] === 0xBF) {
+    return buffer.toString('utf8').substring(1);
+  }
+  
+  // 尝试 UTF-8
+  const utf8 = buffer.toString('utf8');
+  if (/[\u4e00-\u9fa5]/.test(utf8)) {
+    return utf8;
+  }
+  
+  // 尝试 Latin-1 -> UTF-8 修复
+  const bytes: number[] = [];
+  for (let i = 0; i < buffer.length; i++) {
+    bytes.push(buffer[i]);
+  }
+  const fixed = Buffer.from(bytes).toString('utf8');
+  if (/[\u4e00-\u9fa5]/.test(fixed)) {
+    return fixed;
+  }
+  
+  return utf8;
+}
 
 export default router;
