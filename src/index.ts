@@ -1158,8 +1158,8 @@ function createApp() {
     // 添加用户消息到历史
     conversationHistory.push({ role: 'user', content: messageContent })
 
-    // 创建AI消息占位，立即显示"正在分析中……"
-    const aiMessageDiv = addMessage('正在分析中……', false)
+    // 创建AI消息占位，立即显示"正在思考中……"
+    const aiMessageDiv = addMessage('正在思考中……', false)
     const aiTextElement = aiMessageDiv?.querySelector('.ai-message') as HTMLElement
 
     // 显示停止按钮，隐藏发送按钮
@@ -1279,11 +1279,11 @@ function createApp() {
                         }
                       }
                       
-                      // 如果正在处理隐藏数据，显示"正在生成画像……"
+                      // 如果正在处理隐藏数据，显示询问用户期望岗位
                       if (hiddenBlockCount > 0) {
                         // 计算已接收的可见字符数量
                         const visibleChars = currentDisplay.length
-                        displayContent = '正在生成画像，请稍候……'
+                        displayContent = '正在分析简历信息……请问您期望从事哪个岗位方向？'
                       } else {
                         // 进一步清理 Markdown 符号
                         displayContent = currentDisplay
