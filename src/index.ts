@@ -1234,9 +1234,11 @@ function createApp() {
                     aiResponse += parsed.content
                     
                     if (aiTextElement) {
-                      // 逐字符处理，实时过滤隐藏数据
+                      // 逐字符处理，实时过滤隐藏数据和JSON代码块
                       let currentDisplay = ''
                       let hiddenBlockCount = 0
+                      let inJsonCodeBlock = false
+                      let codeBlockStart = 0
                       
                       for (let i = 0; i < aiResponse.length; i++) {
                         const char = aiResponse[i]
@@ -1256,8 +1258,23 @@ function createApp() {
                           continue
                         }
                         
-                        // 只有不在隐藏数据块中时才添加到显示内容
-                        if (hiddenBlockCount === 0) {
+                        // 检测 JSON 代码块开始（后台数据不展示）
+                        if (!inJsonCodeBlock && remaining.startsWith('```json')) {
+                          inJsonCodeBlock = true
+                          codeBlockStart = i
+                          i += 5  // 跳过 "```json"
+                          continue
+                        }
+                        
+                        // 检测 JSON 代码块结束
+                        if (inJsonCodeBlock && remaining.startsWith('```')) {
+                          inJsonCodeBlock = false
+                          i += 2  // 跳过 "```"
+                          continue
+                        }
+                        
+                        // 只有不在隐藏数据块和JSON代码块中时才添加到显示内容
+                        if (hiddenBlockCount === 0 && !inJsonCodeBlock) {
                           currentDisplay += char
                         }
                       }
@@ -1385,11 +1402,19 @@ function createApp() {
       })
 
       // 只有在正常完成时才保存到历史（如果是中断，内容已经在消息框中了）
-      // 保存时也要移除隐藏数据
+      // 保存时也要移除隐藏数据和JSON代码块（后台数据不展示）
       if (aiResponse) {
         const finalResponse = aiResponse
           .replace(/{{HIDDEN_DATA_START}}[\s\S]*?{{HIDDEN_DATA_END}}/g, '')
+          .replace(/```json\s*[\s\S]*?```/g, '')  // 移除JSON代码块（后台数据不展示）
+          .replace(/```[\s\S]*?```/g, '')  // 移除所有代码块
           .trim()
+        
+        // 更新消息元素内容，移除JSON代码块
+        if (aiTextElement) {
+          aiTextElement.textContent = finalResponse || '分析完成'
+        }
+        
         conversationHistory.push({ role: 'assistant', content: finalResponse })
       }
       console.log('About to set isGenerating = false (normal completion)')
