@@ -1141,8 +1141,7 @@ function createApp() {
         
         // 清除 pendingManualResumeText
         pendingManualResumeText = null
-      }
-    } else {
+      } else {
       // 没有文件时，检查是否为简历确认消息
       const trimmedMessage = message.trim().toLowerCase()
       const confirmWords = ['正确', '没问题', '是的', '确认', 'ok', 'yes', 'y', '对', '可以', '好的', '继续', '开始分析', '生成画像', '分析简历']
