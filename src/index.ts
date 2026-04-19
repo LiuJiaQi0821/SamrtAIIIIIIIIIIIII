@@ -1294,18 +1294,45 @@ function createApp() {
         hiddenDataMatch.forEach((match, index) => {
           console.log(`Processing hidden block ${index + 1}:`, match.substring(0, 200))
           const jsonContent = match.replace(/{{HIDDEN_DATA_START}}/, '').replace(/{{HIDDEN_DATA_END}}/, '').trim()
-          try {
-            const jsonMatch = jsonContent.match(/```json\s*([\s\S]*?)```/)
-            if (jsonMatch) {
-              console.log(`Block ${index + 1} JSON found, parsing...`)
-              const jsonData = JSON.parse(jsonMatch[1])
-              console.log(`Block ${index + 1} parsed successfully, type:`, jsonData.type)
-              handleProfileData(jsonData)
-            } else {
-              console.log(`Block ${index + 1}: No JSON found in content`)
-            }
-          } catch (e) {
-            console.error(`Block ${index + 1} parse error:`, e)
+          
+          // 提取所有 JSON 对象（支持单个 code block 中有多个 JSON）
+          const jsonMatches = jsonContent.match(/\{[^{}]*(?:\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}[^{}]*)*\}/g)
+          if (jsonMatches) {
+            console.log(`Found ${jsonMatches.length} JSON objects in block ${index + 1}`)
+            jsonMatches.forEach((jsonStr, jIndex) => {
+              try {
+                const jsonData = JSON.parse(jsonStr)
+                console.log(`Block ${index + 1}, JSON ${jIndex + 1} parsed, type:`, jsonData.type)
+                handleProfileData(jsonData)
+              } catch (e) {
+                console.log(`Block ${index + 1}, JSON ${jIndex + 1} parse error, trying broader match...`)
+                // 尝试更宽松的匹配
+                try {
+                  const broadMatch = jsonContent.match(/```json\s*([\s\S]*?)```/g)
+                  if (broadMatch) {
+                    broadMatch.forEach(block => {
+                      const cleaned = block.replace(/```json\s*/, '').replace(/```/, '').trim()
+                      // 尝试提取多个 JSON 对象
+                      const parts = cleaned.split('}\n{')
+                      parts.forEach((part, pIdx) => {
+                        try {
+                          const fullPart = pIdx === 0 ? part + '}' : '{' + part
+                          const parsed = JSON.parse(fullPart)
+                          console.log(`Block ${index + 1}, part ${pIdx + 1} parsed, type:`, parsed.type)
+                          handleProfileData(parsed)
+                        } catch {
+                          // 忽略
+                        }
+                      })
+                    })
+                  }
+                } catch {
+                  // 忽略
+                }
+              }
+            })
+          } else {
+            console.log(`Block ${index + 1}: No JSON found`)
           }
         })
       } else {
