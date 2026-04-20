@@ -7,7 +7,7 @@ const router = Router();
 // 生成职业规划报告 - 所有数据来自卡片展示页面的真实数据
 router.post('/api/career-report', async (req, res) => {
   try {
-    const { profile, matchedJobs, userExpectations } = req.body;
+    const { profile, matchedJobs, userExpectations, resumeBasicInfo } = req.body;
     
     console.log('📄 开始生成职业规划报告（基于真实数据）...');
     console.log('学生画像:', profile ? Object.keys(profile) : '无');
@@ -16,9 +16,10 @@ router.post('/api/career-report', async (req, res) => {
     console.log('学生画像详情:', profile?.studentProfile ? '有' : '无');
     console.log('岗位匹配:', profile?.jobMatch?.matches ? `${profile.jobMatch.matches.length}个` : '无');
     console.log('匹配岗位数:', matchedJobs?.length || 0);
+    console.log('简历基本信息补充:', resumeBasicInfo ? '有' : '无');
     
     // 构建完整的报告数据 - 全部基于真实数据
-    const reportData = generateReportFromRealData(profile, matchedJobs, userExpectations);
+    const reportData = generateReportFromRealData(profile, matchedJobs, userExpectations, resumeBasicInfo);
     
     console.log('✅ 职业规划报告生成完成（基于真实数据）');
     
@@ -38,9 +39,9 @@ router.post('/api/career-report', async (req, res) => {
 });
 
 // ========== 核心函数：从真实数据生成报告 ==========
-function generateReportFromRealData(profile: any, matchedJobs: any[], userExpectations: any) {
-  // 1. 提取学生基本信息（来自 studentProfile）
-  const studentInfo = extractStudentInfoFromProfile(profile);
+function generateReportFromRealData(profile: any, matchedJobs: any[], userExpectations: any, resumeBasicInfo?: any) {
+  // 1. 提取学生基本信息（来自 studentProfile + resumeBasicInfo 补充）
+  const studentInfo = extractStudentInfoFromProfile(profile, resumeBasicInfo);
   
   // 2. 提取简历评分数据（来自 resumeScore）
   const resumeScoreData = extractResumeScore(profile?.resumeScore);
@@ -97,29 +98,91 @@ function generateReportFromRealData(profile: any, matchedJobs: any[], userExpect
 
 // ========== 数据提取函数 ==========
 
-// 1. 提取学生基本信息
-function extractStudentInfoFromProfile(profile: any) {
-  // 优先从 studentProfile 中提取，其次从 resumeScore 中提取
+// 1. 提取学生基本信息（多源提取，确保数据完整性）
+function extractStudentInfoFromProfile(profile: any, resumeBasicInfo?: any) {
+  console.log('📋 开始提取学生信息，profile keys:', profile ? Object.keys(profile) : '无');
+  console.log('📋 resumeBasicInfo:', resumeBasicInfo ? JSON.stringify(resumeBasicInfo).substring(0, 200) : '无');
+  
+  // 尝试从多个数据源提取
+  let name = '';
+  let gender = '';
+  let education = '';
+  let school = '';
+  let major = '';
+  
+  // === 数据源1: studentProfile（最优先）===
   const sp = profile?.studentProfile || {};
   const basicInfo = sp.basic_info || {};
-  const education = sp.education || {};
+  const eduInfo = sp.education || {};
   
-  // 调试日志
-  console.log('📋 提取学生信息 - basicInfo:', JSON.stringify(basicInfo));
-  console.log('📋 提取学生信息 - education:', JSON.stringify(education));
-  console.log('📋 提取学生信息 - name:', basicInfo.name, 'type:', typeof basicInfo.name);
+  if (basicInfo.name) name = basicInfo.name;
+  if (basicInfo.gender) gender = basicInfo.gender;
+  if (eduInfo.education_level) education = eduInfo.education_level;
+  if (eduInfo.school) school = eduInfo.school;
+  if (eduInfo.major) major = eduInfo.major;
+  
+  console.log('📋 数据源1(studentProfile):', { name, education, school, major });
+  
+  // === 数据源2: resumeScore.details（补充）===
+  if (!name || !education || !school || !major) {
+    const rs = profile?.resumeScore;
+    const details = rs?.details || {};
+    
+    // 从 basic_info 分数项中提取（如果有的话）
+    if (!name && details.basic_info?.candidate_name) {
+      name = details.basic_info.candidate_name;
+    }
+    // 从 education 分数项中提取
+    if (!education && details.education?.education_level) {
+      education = details.education.education_level;
+    }
+    if (!school && details.education?.school) {
+      school = details.education.school;
+    }
+    if (!major && details.education?.major) {
+      major = details.education.major;
+    }
+    
+    console.log('📋 数据源2(resumeScore):', { name, education, school, major });
+  }
+  
+  // === 数据源3: resumeBasicInfo（前端表单数据补充）===
+  if ((!name || !education || !school || !major) && resumeBasicInfo) {
+    if (!name && resumeBasicInfo.name) name = resumeBasicInfo.name;
+    if (!gender && resumeBasicInfo.gender) gender = resumeBasicInfo.gender;
+    if (!education && resumeBasicInfo.degree) education = resumeBasicInfo.degree;  // degree 对应学历
+    if (!school && resumeBasicInfo.school) school = resumeBasicInfo.school;
+    if (!major && resumeBasicInfo.major) major = resumeBasicInfo.major;
+    
+    console.log('📋 数据源3(resumeBasicInfo):', { name, education, school, major });
+  }
+  
+  // === 数据源4: abilityAnalysis（最后补充）===
+  if (!major) {
+    const aa = profile?.abilityAnalysis;
+    if (aa?.专业方向) {
+      major = Array.isArray(aa.专业方向) ? aa.专业方向[0] : aa.专业方向;
+    }
+  }
+  
+  console.log('📋 最终学生信息:', { 
+    name: name || '用户', 
+    education: education || '未知', 
+    school: school || '未知',
+    major: major || '未知'
+  });
   
   return {
-    name: basicInfo.name || '用户',
-    gender: basicInfo.gender || '',
+    name: name || '用户',
+    gender: gender || '',
     age: basicInfo.age || '',
-    phone: basicInfo.phone || '',
-    email: basicInfo.email || '',
-    education: education.education_level || basicInfo.education || '未知',
-    school: education.school || basicInfo.school || '未知',
-    major: education.major || basicInfo.major || '未知',
-    gpa: education.gpa || '',
-    graduationTime: education.graduation_time || '',
+    phone: basicInfo.phone || resumeBasicInfo?.phone || '',
+    email: basicInfo.email || resumeBasicInfo?.email || '',
+    education: education || '未知',
+    school: school || '未知',
+    major: major || '未知',
+    gpa: eduInfo.gpa || '',
+    graduationTime: eduInfo.graduation_time || resumeBasicInfo?.graduation || '',
     experiences: sp.experiences || [],
     projects: sp.projects || [],
     skills: sp.skills || []

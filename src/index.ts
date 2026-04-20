@@ -1909,14 +1909,33 @@ ${currentConditions.join('\n')}
       // 从 localStorage 获取数据
       const studentProfile = JSON.parse(localStorage.getItem('studentProfile') || '{}')
       
+      // 构建请求数据，合并多个数据源确保信息完整
+      const requestData: any = {
+        profile: studentProfile,
+        matchedJobs: studentProfile.jobMatch?.matchedJobs || [],
+        userExpectations: careerExpectations
+      }
+      
+      // 如果 studentProfile 中缺少基本信息，从 resumeData 补充
+      if (!studentProfile?.studentProfile?.basic_info?.name && resumeData.name) {
+        console.log('从 resumeData 补充学生基本信息')
+        requestData.resumeBasicInfo = {
+          name: resumeData.name,
+          gender: resumeData.gender,
+          school: resumeData.school,
+          degree: resumeData.degree,
+          major: resumeData.major,
+          graduation: resumeData.graduation,
+          phone: resumeData.phone,
+          email: resumeData.email,
+          goal: resumeData.goal
+        }
+      }
+      
       const response = await fetch('/api/career-report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          profile: studentProfile,
-          matchedJobs: studentProfile.jobMatch?.matchedJobs || [],
-          userExpectations: careerExpectations
-        })
+        body: JSON.stringify(requestData)
       })
       
       if (!response.ok) {
