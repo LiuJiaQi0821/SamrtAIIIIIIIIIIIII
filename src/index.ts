@@ -1615,7 +1615,7 @@ ${currentConditions.join('\n')}
       
       console.log('初始化渐进式筛选，sessionId:', progressiveFilterSessionId)
       
-      const response = await fetch('/api/progressive-filter/init', {
+      const response = await fetch('/api/progressive-filter-v2/init', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: progressiveFilterSessionId })
@@ -1644,7 +1644,7 @@ ${currentConditions.join('\n')}
     try {
       console.log(`执行渐进式筛选第${step}步，回答:`, answer)
       
-      const response = await fetch('/api/progressive-filter/step', {
+      const response = await fetch('/api/progressive-filter-v2/step', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1689,7 +1689,7 @@ ${currentConditions.join('\n')}
       
       const studentProfile = JSON.parse(localStorage.getItem('studentProfile') || '{}')
       
-      const response = await fetch('/api/progressive-filter/final', {
+      const response = await fetch('/api/progressive-filter-v2/final', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -2028,6 +2028,19 @@ ${jobsSummary}
             try {
               matchAnalysis = JSON.parse(jsonMatch[1]);
               console.log('AI匹配分析完成:', Object.keys(matchAnalysis));
+              
+              // 【关键修复】把晋升路径和横向换岗路径注入到AI分析结果中
+              if (matchAnalysis && matchAnalysis.matches) {
+                matchAnalysis.matches = matchAnalysis.matches.map((match: any, idx: number) => {
+                  const job = jobs[idx];
+                  return {
+                    ...match,
+                    promotion_paths: job?.promotion_paths,
+                    lateral_moves: job?.lateral_moves
+                  };
+                });
+                console.log('已注入晋升路径和横向换岗路径到AI分析结果');
+              }
             } catch {
               console.error('解析匹配分析JSON失败');
             }

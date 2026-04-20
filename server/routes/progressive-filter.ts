@@ -4,6 +4,259 @@ import { execSync } from 'child_process';
 
 const router = Router();
 
+// 生成晋升路径（三级以上）
+function generatePromotionPaths(job: any) {
+  const jobTitle = job.title || job.job_title || '';
+  const industry = job.industry || '';
+  
+  // 根据岗位类型和行业生成晋升路径
+  const paths: Array<{
+    level: number;
+    title: string;
+    description: string;
+    typical_years: string;
+  }> = [];
+  
+  // 基础岗位
+  paths.push({
+    level: 1,
+    title: jobTitle,
+    description: '当前岗位，负责具体执行工作',
+    typical_years: '1-2年'
+  });
+  
+  // 根据不同岗位类型生成不同的晋升路径
+  if (jobTitle.includes('工程师') || jobTitle.includes('开发') || jobTitle.includes('技术')) {
+    paths.push({
+      level: 2,
+      title: '高级' + jobTitle,
+      description: '负责复杂模块开发，指导初级工程师',
+      typical_years: '2-4年'
+    });
+    paths.push({
+      level: 3,
+      title: '技术主管/架构师',
+      description: '负责技术架构设计，带领技术团队',
+      typical_years: '5-8年'
+    });
+    paths.push({
+      level: 4,
+      title: '技术总监/CTO',
+      description: '负责公司技术战略和技术团队管理',
+      typical_years: '8年以上'
+    });
+  } else if (jobTitle.includes('产品') || jobTitle.includes('经理')) {
+    paths.push({
+      level: 2,
+      title: '高级' + jobTitle,
+      description: '负责复杂产品模块，指导初级产品经理',
+      typical_years: '2-4年'
+    });
+    paths.push({
+      level: 3,
+      title: '产品负责人/产品总监',
+      description: '负责产品路线图规划，带领产品团队',
+      typical_years: '5-8年'
+    });
+    paths.push({
+      level: 4,
+      title: '产品VP/CEO',
+      description: '负责公司产品战略和业务发展',
+      typical_years: '8年以上'
+    });
+  } else if (jobTitle.includes('运营') || jobTitle.includes('市场')) {
+    paths.push({
+      level: 2,
+      title: '高级' + jobTitle,
+      description: '负责大型活动和项目，指导初级专员',
+      typical_years: '2-4年'
+    });
+    paths.push({
+      level: 3,
+      title: '运营/市场负责人',
+      description: '负责运营/市场策略制定，带领团队',
+      typical_years: '5-8年'
+    });
+    paths.push({
+      level: 4,
+      title: '运营/市场总监',
+      description: '负责公司运营/市场战略和业务增长',
+      typical_years: '8年以上'
+    });
+  } else if (jobTitle.includes('设计') || jobTitle.includes('UI') || jobTitle.includes('UX')) {
+    paths.push({
+      level: 2,
+      title: '高级' + jobTitle,
+      description: '负责复杂设计项目，指导初级设计师',
+      typical_years: '2-4年'
+    });
+    paths.push({
+      level: 3,
+      title: '设计负责人/设计主管',
+      description: '负责设计系统建设，带领设计团队',
+      typical_years: '5-8年'
+    });
+    paths.push({
+      level: 4,
+      title: '设计总监',
+      description: '负责公司设计战略和设计文化建设',
+      typical_years: '8年以上'
+    });
+  } else {
+    // 通用晋升路径
+    paths.push({
+      level: 2,
+      title: '高级' + jobTitle,
+      description: '承担更复杂的工作职责，指导新人',
+      typical_years: '2-4年'
+    });
+    paths.push({
+      level: 3,
+      title: '团队主管',
+      description: '负责团队管理和业务规划',
+      typical_years: '5-8年'
+    });
+    paths.push({
+      level: 4,
+      title: '部门经理/总监',
+      description: '负责部门战略和团队发展',
+      typical_years: '8年以上'
+    });
+  }
+  
+  return paths;
+}
+
+// 生成横向换岗路径（每个岗位不少于2条）
+function generateLateralMoves(job: any) {
+  const jobTitle = job.title || job.job_title || '';
+  const industry = job.industry || '';
+  
+  const moves: Array<{
+    target_title: string;
+    target_industry: string;
+    description: string;
+    transferable_skills: string[];
+    suggested_actions: string[];
+  }> = [];
+  
+  // 根据当前岗位生成相关的横向换岗路径
+  if (jobTitle.includes('工程师') || jobTitle.includes('开发') || jobTitle.includes('技术')) {
+    moves.push({
+      target_title: '产品经理',
+      target_industry: industry || '互联网',
+      description: '从技术实现转向产品规划，将技术思维应用于产品设计',
+      transferable_skills: ['逻辑思维', '用户需求理解', '项目管理', '技术评估'],
+      suggested_actions: ['学习产品方法论', '多参与产品评审', '培养商业敏感度']
+    });
+    moves.push({
+      target_title: '技术支持/解决方案工程师',
+      target_industry: industry || '互联网',
+      description: '从开发转向客户技术支持，帮助客户解决技术问题',
+      transferable_skills: ['技术能力', '问题排查', '沟通能力', '客户服务'],
+      suggested_actions: ['提升沟通技巧', '学习产品知识', '培养客户思维']
+    });
+    moves.push({
+      target_title: '技术培训师/技术布道师',
+      target_industry: '教育/互联网',
+      description: '分享技术知识，培养更多技术人才',
+      transferable_skills: ['技术能力', '表达能力', '教学能力', '内容创作'],
+      suggested_actions: ['开始写技术博客', '参与技术分享', '提升演讲能力']
+    });
+  } else if (jobTitle.includes('产品')) {
+    moves.push({
+      target_title: '运营经理',
+      target_industry: industry || '互联网',
+      description: '从产品规划转向产品运营，将产品理念落地',
+      transferable_skills: ['用户理解', '数据分析', '项目协调', '产品思维'],
+      suggested_actions: ['学习运营方法论', '关注数据指标', '培养活动策划能力']
+    });
+    moves.push({
+      target_title: '用户研究/UX研究员',
+      target_industry: industry || '互联网',
+      description: '深入研究用户行为和需求，为产品提供决策依据',
+      transferable_skills: ['用户思维', '数据分析', '洞察力', '同理心'],
+      suggested_actions: ['学习用户研究方法', '多做用户访谈', '培养分析能力']
+    });
+    moves.push({
+      target_title: '项目经理',
+      target_industry: industry || '互联网',
+      description: '从产品规划转向项目管理，协调资源推动项目落地',
+      transferable_skills: ['项目规划', '沟通协调', '风险管理', '资源整合'],
+      suggested_actions: ['学习PMP等项目管理方法', '提升组织协调能力', '培养风险意识']
+    });
+  } else if (jobTitle.includes('运营') || jobTitle.includes('市场')) {
+    moves.push({
+      target_title: '产品经理',
+      target_industry: industry || '互联网',
+      description: '从用户运营转向产品规划，将用户洞察转化为产品功能',
+      transferable_skills: ['用户洞察', '数据分析', '活动策划', '用户思维'],
+      suggested_actions: ['学习产品方法论', '多参与产品讨论', '培养产品思维']
+    });
+    moves.push({
+      target_title: '内容运营/内容营销',
+      target_industry: industry || '互联网',
+      description: '专注于内容创作和内容策略，通过内容连接用户',
+      transferable_skills: ['文案能力', '内容敏感度', '用户理解', '营销思维'],
+      suggested_actions: ['提升写作能力', '研究内容策略', '培养内容敏感度']
+    });
+    moves.push({
+      target_title: '品牌营销',
+      target_industry: industry || '互联网',
+      description: '从效果营销转向品牌建设，提升公司品牌影响力',
+      transferable_skills: ['营销思维', '创意能力', '市场洞察', '传播能力'],
+      suggested_actions: ['学习品牌理论', '关注品牌案例', '培养创意思维']
+    });
+  } else if (jobTitle.includes('设计')) {
+    moves.push({
+      target_title: '产品经理',
+      target_industry: industry || '互联网',
+      description: '从视觉设计转向产品规划，将设计思维应用于产品决策',
+      transferable_skills: ['用户体验思维', '视觉敏感度', '同理心', '细节把控'],
+      suggested_actions: ['学习产品方法论', '培养商业思维', '提升产品感']
+    });
+    moves.push({
+      target_title: '设计管理/设计总监',
+      target_industry: industry || '互联网',
+      description: '从执行设计转向设计管理，带领设计团队成长',
+      transferable_skills: ['设计能力', '审美品味', '团队管理', '设计系统思维'],
+      suggested_actions: ['培养管理能力', '建立设计系统', '提升团队领导力']
+    });
+    moves.push({
+      target_title: '用户体验研究员',
+      target_industry: industry || '互联网',
+      description: '从视觉设计转向用户研究，深入理解用户需求',
+      transferable_skills: ['用户思维', '同理心', '观察力', '分析能力'],
+      suggested_actions: ['学习用户研究方法', '多做用户访谈', '培养分析思维']
+    });
+  } else {
+    // 通用横向换岗路径
+    moves.push({
+      target_title: '项目经理',
+      target_industry: industry || '互联网',
+      description: '从业务执行转向项目管理，协调资源推动项目落地',
+      transferable_skills: ['业务理解', '沟通协调', '项目规划', '执行力'],
+      suggested_actions: ['学习项目管理方法', '提升组织协调能力', '培养风险意识']
+    });
+    moves.push({
+      target_title: '业务分析师',
+      target_industry: industry || '互联网',
+      description: '深入分析业务数据，为业务决策提供支持',
+      transferable_skills: ['业务理解', '数据分析', '逻辑思维', '洞察能力'],
+      suggested_actions: ['提升数据分析能力', '学习商业分析方法', '培养商业敏感度']
+    });
+    moves.push({
+      target_title: '培训师/企业教练',
+      target_industry: '教育/咨询',
+      description: '分享专业知识和经验，帮助他人成长',
+      transferable_skills: ['专业能力', '表达能力', '教学能力', '同理心'],
+      suggested_actions: ['提升表达能力', '开始分享经验', '培养教学思维']
+    });
+  }
+  
+  return moves;
+}
+
 // 加载环境变量
 function loadEnv(): void {
   try {
@@ -472,20 +725,34 @@ router.post('/api/progressive-filter-v2/final', async (req, res) => {
       profile
     );
     
-    // 格式化岗位数据
-    const jobs = matchedJobs.map((job) => ({
-      id: job.id,
-      title: job.job_title,
-      company: job.company_name,
-      salary: job.salary_range,
-      location: job.address,
-      industry: job.industry,
-      company_type: job.company_type,
-      company_size: job.company_size,
-      description: job.job_description
-    }));
+    // 格式化岗位数据，并添加晋升路径和横向换岗路径
+    const jobs = matchedJobs.map((job) => {
+      const formattedJob = {
+        id: job.id,
+        title: job.job_title,
+        company: job.company_name,
+        salary: job.salary_range,
+        location: job.address,
+        industry: job.industry,
+        company_type: job.company_type,
+        company_size: job.company_size,
+        description: job.job_description
+      };
+      
+      // 生成晋升路径（三级以上）
+      const promotionPaths = generatePromotionPaths(formattedJob);
+      
+      // 生成横向换岗路径（每个岗位不少于2条）
+      const lateralMoves = generateLateralMoves(formattedJob);
+      
+      return {
+        ...formattedJob,
+        promotion_paths: promotionPaths,
+        lateral_moves: lateralMoves
+      };
+    });
     
-    console.log(`最终匹配完成，返回 ${jobs.length} 个岗位`);
+    console.log(`最终匹配完成，返回 ${jobs.length} 个岗位（已添加晋升路径和横向换岗路径）`);
     
     // 清理会话
     filterSessionsV2.delete(sessionId);
