@@ -99,236 +99,89 @@ interface CareerPathRecord {
   to_job_id: number;
 }
 
-// 使用预分类表进行高效搜索
-async function searchJobsByClassification(
-  industry?: string,
-  location?: string,
-  jobType?: string,
-  keyword?: string
-): Promise<number[]> {
-  const db = getSupabaseClient();
-  if (!db) {
-    throw new Error('数据库未配置');
-  }
-  
-  console.log('🚀 使用预分类表进行高效搜索:', { industry, location, jobType, keyword });
-  
-  let resultIds: Set<number> | null = null;
-  
-  try {
-    // 1. 行业筛选
-    if (industry) {
-      const industries = industry.split(/[,，\s、]+/).filter(i => i.trim());
-      if (industries.length > 0) {
-        const { data, error } = await db
-          .from('job_industries')
-          .select('job_id')
-          .in('industry', industries);
-        
-        if (!error && data) {
-          resultIds = new Set(data.map(d => d.job_id));
-          console.log(`🏭 行业筛选: ${resultIds.size} 个岗位`);
-        }
-      }
-    }
-    
-    // 2. 城市筛选
-    if (location) {
-      const cities = location.split(/[,，\s、]+/).filter(c => c.trim());
-      if (cities.length > 0) {
-        const { data, error } = await db
-          .from('job_cities')
-          .select('job_id')
-          .in('city', cities);
-        
-        if (!error && data) {
-          const cityIds = new Set(data.map(d => d.job_id));
-          if (resultIds) {
-            // 取交集
-            resultIds = new Set([...resultIds].filter(id => cityIds.has(id)));
-          } else {
-            resultIds = cityIds;
-          }
-          console.log(`🏙️ 城市筛选: ${resultIds.size} 个岗位`);
-        }
-      }
-    }
-    
-    // 3. 岗位类型或关键词筛选
-    const searchKeyword = jobType || keyword;
-    if (searchKeyword) {
-      const keywords = searchKeyword.split(/[,，\s、]+/).filter(k => k.trim());
-      if (keywords.length > 0) {
-        const { data, error } = await db
-          .from('job_keywords')
-          .select('job_id')
-          .in('keyword', keywords)
-          .in('keyword_type', ['title', 'description', 'skill']);
-        
-        if (!error && data) {
-          const keywordIds = new Set(data.map(d => d.job_id));
-          if (resultIds) {
-            // 取交集
-            resultIds = new Set([...resultIds].filter(id => keywordIds.has(id)));
-          } else {
-            resultIds = keywordIds;
-          }
-          console.log(`🔍 关键词筛选: ${resultIds.size} 个岗位`);
-        }
-      }
-    }
-    
-    // 如果预分类表有结果，返回
-    if (resultIds && resultIds.size > 0) {
-      console.log(`✅ 预分类表搜索成功: ${resultIds.size} 个岗位`);
-      return Array.from(resultIds);
-    }
-    
-  } catch (error) {
-    console.warn('⚠️ 预分类表搜索失败，回退到传统方法:', error);
-  }
-  
-  // 预分类表没有结果，返回空数组
-  return [];
-}
-
-// 根据ID列表获取岗位详情
-async function getJobsByIds(jobIds: number[]): Promise<JobRecord[]> {
-  if (jobIds.length === 0) return [];
-  
-  const db = getSupabaseClient();
-  if (!db) {
-    throw new Error('数据库未配置');
-  }
-  
-  const { data, error } = await db
-    .from('jobs')
-    .select('id,job_title,company_name,salary_range,address,industry,company_type,company_size,job_description')
-    .in('id', jobIds);
-  
-  if (error) {
-    throw error;
-  }
-  
-  return (data || []) as JobRecord[];
-}
-
-// 传统搜索方法（作为回退）
-async function searchJobsTraditional(
-  industry?: string,
-  salary?: string,
-  location?: string,
-  company?: string,
-  size?: string,
-  jobType?: string,
-  keyword?: string
-): Promise<JobRecord[]> {
-  // 构建筛选条件
-  const filters: string[] = [];
-  
-  if (industry) {
-    filters.push(`industry=ilike.*${encodeURIComponent(industry)}*`);
-  }
-  if (salary) {
-    filters.push(`salary_range=eq.${encodeURIComponent(salary)}`);
-  }
-  if (location) {
-    filters.push(`address=ilike.${encodeURIComponent(location)}*`);
-  }
-  if (company) {
-    filters.push(`company_type=eq.${encodeURIComponent(company)}`);
-  }
-  if (size) {
-    filters.push(`company_size=eq.${encodeURIComponent(size)}`);
-  }
-  if (jobType) {
-    filters.push(`job_title=ilike.*${encodeURIComponent(jobType)}*`);
-  }
-  
-  // 关键词搜索：同时匹配岗位名称、公司名称、职位描述
-  if (keyword && keyword.trim()) {
-    const encodedKeyword = encodeURIComponent(keyword.trim());
-    const orFilter = `(job_title.ilike.*${encodedKeyword}*,company_name.ilike.*${encodedKeyword}*,job_description.ilike.*${encodedKeyword}*)`;
-    const encodedOrFilter = orFilter.replace(/\(/g, '%28').replace(/\)/g, '%29').replace(/,/g, '%2C');
-    filters.push(`or=${encodedOrFilter}`);
-  }
-  
-  // 构建基础URL
-  let url = `${supabaseUrl}/rest/v1/jobs?select=id,job_title,company_name,salary_range,address,industry,company_type,company_size,job_description&order=id`;
-  
-  if (filters.length > 0) {
-    url += '&' + filters.join('&');
-  }
-  
-  // 使用分页获取所有符合条件的数据
-  const allJobs: JobRecord[] = [];
-  const pageSize = 1000;
-  let page = 0;
-  let hasMore = true;
-  
-  while (hasMore) {
-    const offset = page * pageSize;
-    const pageUrl = `${url}&limit=${pageSize}&offset=${offset}`;
-    
-    const response = await fetch(pageUrl, {
-      method: 'GET',
-      headers: {
-        'apikey': supabaseKey,
-        'Authorization': `Bearer ${supabaseKey}`,
-        'Content-Type': 'application/json'
-      }
-    });
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    
-    if (Array.isArray(data) && data.length > 0) {
-      allJobs.push(...data);
-      page++;
-      if (data.length < pageSize) {
-        hasMore = false;
-      }
-    } else {
-      hasMore = false;
-    }
-  }
-  
-  return allJobs;
-}
-
-// 搜索岗位API（优化版本）
+// 搜索岗位API
 router.post('/api/jobs/search', async (req, res) => {
   try {
     const { industry, salary, location, company, size, jobType, keyword } = req.body;
     
-    console.log('🔍 岗位搜索请求:', { industry, salary, location, company, size, jobType, keyword });
+    // 构建筛选条件
+    const filters: string[] = [];
     
-    let allJobs: JobRecord[] = [];
-    let usedOptimized = false;
+    if (industry) {
+      filters.push(`industry=ilike.*${encodeURIComponent(industry)}*`);
+    }
+    if (salary) {
+      filters.push(`salary_range=eq.${encodeURIComponent(salary)}`);
+    }
+    if (location) {
+      filters.push(`address=ilike.${encodeURIComponent(location)}*`);
+    }
+    if (company) {
+      filters.push(`company_type=eq.${encodeURIComponent(company)}`);
+    }
+    if (size) {
+      filters.push(`company_size=eq.${encodeURIComponent(size)}`);
+    }
+    if (jobType) {
+      filters.push(`job_title=ilike.*${encodeURIComponent(jobType)}*`);
+    }
     
-    // 1. 优先尝试使用预分类表进行高效搜索
-    try {
-      const optimizedIds = await searchJobsByClassification(industry, location, jobType, keyword);
+    // 关键词搜索：同时匹配岗位名称、公司名称、职位描述
+    if (keyword && keyword.trim()) {
+      // 对关键词进行 URL 编码
+      const encodedKeyword = encodeURIComponent(keyword.trim());
+      // 构建 or 条件
+      const orFilter = `(job_title.ilike.*${encodedKeyword}*,company_name.ilike.*${encodedKeyword}*,job_description.ilike.*${encodedKeyword}*)`;
+      // 对括号和逗号进行编码
+      const encodedOrFilter = orFilter.replace(/\(/g, '%28').replace(/\)/g, '%29').replace(/,/g, '%2C');
+      filters.push(`or=${encodedOrFilter}`);
+    }
+    
+    // 构建基础URL - 包含更多字段用于显示
+    let url = `${supabaseUrl}/rest/v1/jobs?select=id,job_title,company_name,salary_range,address,industry,company_type,company_size,job_description&order=id`;
+    
+    // 添加筛选条件
+    if (filters.length > 0) {
+      url += '&' + filters.join('&');
+    }
+    
+    // 使用分页获取所有符合条件的数据
+    const allJobs: JobRecord[] = [];
+    const pageSize = 1000;
+    let page = 0;
+    let hasMore = true;
+    
+    while (hasMore) {
+      const offset = page * pageSize;
+      const pageUrl = `${url}&limit=${pageSize}&offset=${offset}`;
       
-      if (optimizedIds.length > 0) {
-        allJobs = await getJobsByIds(optimizedIds);
-        usedOptimized = true;
-        console.log(`✅ 使用预分类表搜索: ${allJobs.length} 个岗位`);
+      const response = await fetch(pageUrl, {
+        method: 'GET',
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${supabaseKey}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-    } catch (error) {
-      console.warn('⚠️ 预分类表搜索失败，回退到传统方法:', error);
+      
+      const data = await response.json();
+      
+      if (Array.isArray(data) && data.length > 0) {
+        allJobs.push(...data);
+        page++;
+        if (data.length < pageSize) {
+          hasMore = false;
+        }
+      } else {
+        hasMore = false;
+      }
     }
     
-    // 2. 如果预分类表没有结果，使用传统搜索方法
-    if (!usedOptimized || allJobs.length === 0) {
-      console.log('🔄 使用传统搜索方法');
-      allJobs = await searchJobsTraditional(industry, salary, location, company, size, jobType, keyword);
-    }
-    
-    // 格式化数据
+    // 格式化数据 - 使用正确的列名
     const jobs = allJobs.map((job) => ({
       id: job.id,
       title: job.job_title,
@@ -343,11 +196,8 @@ router.post('/api/jobs/search', async (req, res) => {
     
     res.json({
       success: true,
-      jobs,
-      usedOptimized,
-      optimizationNote: usedOptimized ? '使用预分类表优化，查询速度提升10-100倍' : '使用传统查询方法'
+      jobs
     });
-    
   } catch (error) {
     console.error('搜索岗位失败:', error);
     res.status(500).json({ success: false, error: '服务器错误' });
