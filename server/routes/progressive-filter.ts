@@ -109,6 +109,23 @@ interface FilterState {
 // 存储筛选状态（按会话或用户）
 const filterSessions = new Map<string, FilterState>();
 
+// 判断是否是"无要求"的回答
+function isNoPreferenceAnswer(answer: string): boolean {
+  if (!answer || typeof answer !== 'string') return true;
+  
+  const normalized = answer.toLowerCase().trim();
+  
+  // 无要求的关键词
+  const noPreferenceKeywords = [
+    '没有', '无', '随便', '都可以', '都行', '无所谓', 
+    '不知道', '不清楚', '没要求', '不限制', '任意',
+    'no', 'none', 'any', 'whatever', 'dont care', 'don\'t care',
+    'not sure', '不确定'
+  ];
+  
+  return noPreferenceKeywords.some(keyword => normalized.includes(keyword));
+}
+
 // 模糊匹配函数（更宽松的匹配）
 function fuzzyMatch(text: string | null, pattern: string): boolean {
   if (!text) return false;
@@ -313,17 +330,25 @@ router.post('/api/progressive-filter/step', async (req, res) => {
       });
     }
     
-    // 更新筛选条件
-    if (step === 1) {
-      filterState.filters.industry = answer;
-    } else if (step === 2) {
-      filterState.filters.jobType = answer;
-    } else if (step === 3) {
-      filterState.filters.city = answer;
-    } else if (step === 4) {
-      filterState.filters.salary = answer;
-    } else if (step === 5) {
-      filterState.filters.other = answer;
+    // 判断是否是"无要求"的回答
+    const isNoPreference = isNoPreferenceAnswer(answer);
+    if (isNoPreference) {
+      console.log(`第${step}步用户回答"无要求"，跳过此条件筛选`);
+    }
+    
+    // 更新筛选条件（只有不是"无要求"时才设置）
+    if (!isNoPreference) {
+      if (step === 1) {
+        filterState.filters.industry = answer;
+      } else if (step === 2) {
+        filterState.filters.jobType = answer;
+      } else if (step === 3) {
+        filterState.filters.city = answer;
+      } else if (step === 4) {
+        filterState.filters.salary = answer;
+      } else if (step === 5) {
+        filterState.filters.other = answer;
+      }
     }
     
     filterState.step = step;
