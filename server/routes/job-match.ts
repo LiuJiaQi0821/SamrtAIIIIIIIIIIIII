@@ -85,6 +85,22 @@ function getSupabaseClient() {
   return supabase;
 }
 
+// 随机抽取岗位样本
+function sampleJobs(jobs: FormattedJob[], sampleSize: number = 50): FormattedJob[] {
+  if (jobs.length <= sampleSize) {
+    return jobs;
+  }
+  
+  // Fisher-Yates 洗牌算法
+  const shuffled = [...jobs];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  
+  return shuffled.slice(0, sampleSize);
+}
+
 // 人岗匹配分析API
 router.post('/api/job-match', async (req, res) => {
   const startTime = Date.now();
@@ -157,7 +173,7 @@ router.post('/api/job-match', async (req, res) => {
       }
     ];
     
-    let matchedJobs: FormattedJob[] = [];
+    let allMatchedJobs: FormattedJob[] = [];
     let finalDroppedConditions: string[] = [];
     
     // 逐个尝试搜索策略
@@ -173,39 +189,45 @@ router.post('/api/job-match', async (req, res) => {
       
       console.log('当前搜索条件:', searchFilters);
       
-      // 直接调用 searchJobs 函数，只取前10条
-      const jobs = await searchJobs(searchFilters, 10);
+      // 直接调用 searchJobs 函数，获取**全部**符合条件的数据
+      const jobs = await searchJobs(searchFilters);
       
       if (jobs.length > 0) {
-        matchedJobs = jobs.slice(0, 5);
+        allMatchedJobs = jobs;
         finalDroppedConditions = strategy.droppedConditions;
-        console.log(`✅ 找到 ${matchedJobs.length} 个岗位，已放宽条件:`, finalDroppedConditions);
+        console.log(`✅ 找到 ${allMatchedJobs.length} 个符合条件的岗位，已放宽条件:`, finalDroppedConditions);
         break;
       }
     }
     
     const searchTime = Date.now() - startTime;
-    console.log(`⏱️  岗位搜索耗时: ${searchTime}ms`);
+    console.log(`⏱️  岗位搜索耗时: ${searchTime}ms，共找到 ${allMatchedJobs.length} 个岗位`);
+    
+    // 从全部符合条件的岗位中随机抽取样本进行AI分析
+    // 如果岗位很多，只抽取50个进行分析，避免AI处理超时
+    const sampleJobs = sampleJobs(allMatchedJobs, 50);
+    console.log(`从 ${allMatchedJobs.length} 个岗位中抽取 ${sampleJobs.length} 个进行AI匹配度分析`);
     
     // 构建提示信息
     let friendlyMessage = '';
     if (finalDroppedConditions.length === 0) {
-      friendlyMessage = '岗位匹配分析已完成！为您找到了5个最匹配的岗位，请查看左侧卡片了解详细分析结果。';
+      friendlyMessage = `岗位匹配分析已完成！从 ${allMatchedJobs.length} 个符合条件的岗位中为您推荐了最匹配的5个，请查看左侧卡片了解详细分析结果。`;
     } else if (finalDroppedConditions.length < 5) {
-      friendlyMessage = `为了给您找到合适的岗位，我们放宽了以下条件：${finalDroppedConditions.join('、')}。以下是基于您的学生画像推荐的岗位，请查看左侧卡片！`;
+      friendlyMessage = `为了给您找到合适的岗位，我们放宽了以下条件：${finalDroppedConditions.join('、')}。从 ${allMatchedJobs.length} 个岗位中为您推荐了最匹配的5个，请查看左侧卡片！`;
     } else {
-      friendlyMessage = `抱歉，根据您的具体条件暂时没有找到匹配岗位。我们已基于您的简历背景为您推荐了以下岗位，放宽了条件：${finalDroppedConditions.join('、')}。请查看左侧卡片！`;
+      friendlyMessage = `抱歉，根据您的具体条件暂时没有找到匹配岗位。我们已基于您的简历背景从 ${allMatchedJobs.length} 个岗位中为您推荐了以下岗位，放宽了条件：${finalDroppedConditions.join('、')}。请查看左侧卡片！`;
     }
     
-    console.log('最终匹配岗位数:', matchedJobs.length);
     console.log('最终提示语:', friendlyMessage);
     
     // 2. 调用AI进行匹配度分析
     let matchAnalysis = null;
-    if (matchedJobs.length > 0) {
+    let matchedJobsForDisplay: FormattedJob[] = [];
+    
+    if (sampleJobs.length > 0) {
       // 构建AI分析提示词
-      const jobsSummary = matchedJobs.map((job: any, idx: number) => `
-岗位${idx + 1}:
+      const jobsSummary = sampleJobs.map((job: any, idx: number) => `
+岗位${idx + 1} (ID: ${job.id}):
 - 岗位名称: ${job.title}
 - 公司: ${job.company}
 - 薪资: ${job.salary}
@@ -221,14 +243,17 @@ router.post('/api/job-match', async (req, res) => {
 【学生画像】
 ${profileSummary}
 
-【匹配岗位】
+【待匹配岗位列表】
+共 ${sampleJobs.length} 个岗位：
+
 ${jobsSummary}
 
 【输出要求 - 必须严格遵守】
-1. 只输出JSON格式的匹配分析结果 + 一句友好提示语
+1. 只输出JSON格式的匹配分析结果
 2. **严禁**输出任何表格、Markdown格式的岗位列表
 3. **严禁**输出"### 岗位匹配结果"、"| 岗位名称 |..."这类内容
 4. **严禁**输出任何额外的解释说明文字
+5. 从 ${sampleJobs.length} 个岗位中选择匹配度最高的5个进行详细分析
 
 请为每个岗位从以下四个维度进行详细分析和打分：
 
@@ -272,6 +297,7 @@ ${jobsSummary}
 {
   "matches": [
     {
+      "job_id": 岗位ID,
       "job_title": "岗位名称",
       "company": "公司名",
       "salary": "薪资",
@@ -318,6 +344,7 @@ ${jobsSummary}
 \`\`\`
 
 注意：
+- matches数组必须包含5个岗位，按匹配度从高到低排序
 - 每个维度必须包含 strengths（优势项）和 gaps（差距项）
 - key_gaps 中的差距项需要在前端高亮显示
 - 权重必须根据岗位特点自适应调整
@@ -374,6 +401,24 @@ ${jobsSummary}
             try {
               matchAnalysis = JSON.parse(jsonMatch[1]);
               console.log('✅ 匹配分析完成');
+              
+              // 根据AI返回的job_id匹配完整的岗位信息
+              if (matchAnalysis && matchAnalysis.matches) {
+                matchedJobsForDisplay = matchAnalysis.matches.map((m: any) => {
+                  const fullJob = allMatchedJobs.find(j => j.id === m.job_id);
+                  return fullJob || {
+                    id: m.job_id,
+                    title: m.job_title,
+                    company: m.company,
+                    salary: m.salary,
+                    location: m.location,
+                    industry: m.industry,
+                    company_type: '',
+                    company_size: '',
+                    description: ''
+                  };
+                });
+              }
             } catch {
               console.error('❌ 解析匹配分析JSON失败');
             }
@@ -381,6 +426,11 @@ ${jobsSummary}
           
           const aiTime = Date.now() - aiStartTime;
           console.log(`⏱️  AI分析耗时: ${aiTime}ms`);
+          
+          // 如果没有AI分析结果，就取前5个岗位
+          if (matchedJobsForDisplay.length === 0) {
+            matchedJobsForDisplay = allMatchedJobs.slice(0, 5);
+          }
           
           // 保存分析结果到localStorage（通过前端完成，后端只返回数据）
           const totalTime = Date.now() - startTime;
@@ -390,7 +440,8 @@ ${jobsSummary}
             success: true,
             message: friendlyMessage,
             analysis: matchAnalysis,
-            jobs: matchedJobs,
+            jobs: matchedJobsForDisplay,
+            allJobsCount: allMatchedJobs.length,
             performance: {
               searchTime,
               aiTime,
@@ -405,14 +456,19 @@ ${jobsSummary}
       }
     }
     
-    // 如果没有AI分析结果，返回基本信息
+    // 如果没有AI分析结果，返回前5个岗位
+    if (matchedJobsForDisplay.length === 0) {
+      matchedJobsForDisplay = allMatchedJobs.slice(0, 5);
+    }
+    
     const totalTime = Date.now() - startTime;
     console.log(`========== 人岗匹配分析完成(无AI)，总耗时: ${totalTime}ms ==========`);
     
     res.json({
       success: true,
       message: friendlyMessage,
-      jobs: matchedJobs,
+      jobs: matchedJobsForDisplay,
+      allJobsCount: allMatchedJobs.length,
       performance: {
         searchTime,
         totalTime

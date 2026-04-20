@@ -162,6 +162,7 @@ function setCache(key: string, data: FormattedJob[]): void {
 }
 
 // 核心搜索逻辑 - 可以被其他模块直接调用
+// 获取**全部**符合条件的岗位数据
 export async function searchJobs(filters: {
   industry?: string;
   salary?: string;
@@ -170,13 +171,13 @@ export async function searchJobs(filters: {
   size?: string;
   jobType?: string;
   keyword?: string;
-}, limit: number = 20): Promise<FormattedJob[]> {
+}): Promise<FormattedJob[]> {
   // 检查缓存
   const cacheKey = getCacheKey(filters);
   const cached = getFromCache(cacheKey);
   if (cached) {
-    console.log('使用缓存的搜索结果');
-    return cached.slice(0, limit);
+    console.log(`使用缓存的搜索结果，共 ${cached.length} 条`);
+    return cached;
   }
 
   const { industry, salary, location, company, size, jobType, keyword } = filters;
@@ -211,32 +212,57 @@ export async function searchJobs(filters: {
     filterParts.push(`or=${encodedOrFilter}`);
   }
   
-  // 构建URL - 只获取需要的字段，并且只取前limit条
-  let url = `${supabaseUrl}/rest/v1/jobs?select=id,job_title,company_name,salary_range,address,industry,company_type,company_size,job_description&order=id.desc&limit=${limit}`;
+  // 构建基础URL - 只获取需要的字段，优化查询性能
+  let baseUrl = `${supabaseUrl}/rest/v1/jobs?select=id,job_title,company_name,salary_range,address,industry,company_type,company_size,job_description`;
   
   if (filterParts.length > 0) {
-    url += '&' + filterParts.join('&');
+    baseUrl += '&' + filterParts.join('&');
   }
   
-  console.log('搜索URL:', url.replace(supabaseUrl, '[SUPABASE_URL]'));
+  console.log('搜索条件:', filters);
+  console.log('开始获取全部符合条件的岗位数据...');
   
-  const response = await fetch(url, {
-    method: 'GET',
-    headers: {
-      'apikey': supabaseKey,
-      'Authorization': `Bearer ${supabaseKey}`,
-      'Content-Type': 'application/json'
+  // 使用分页获取所有符合条件的数据
+  const allJobs: JobRecord[] = [];
+  const pageSize = 1000;
+  let page = 0;
+  let hasMore = true;
+  
+  while (hasMore) {
+    const offset = page * pageSize;
+    const url = `${baseUrl}&order=id&limit=${pageSize}&offset=${offset}`;
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'apikey': supabaseKey,
+        'Authorization': `Bearer ${supabaseKey}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
-  });
-  
-  if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`);
+    
+    const data = await response.json();
+    
+    if (Array.isArray(data) && data.length > 0) {
+      allJobs.push(...data);
+      page++;
+      console.log(`已获取 ${allJobs.length} 条数据...`);
+      if (data.length < pageSize) {
+        hasMore = false;
+      }
+    } else {
+      hasMore = false;
+    }
   }
   
-  const data = await response.json();
+  console.log(`✅ 共获取 ${allJobs.length} 条符合条件的岗位数据`);
   
   // 格式化数据
-  const jobs: FormattedJob[] = (Array.isArray(data) ? data : []).map((job: JobRecord) => ({
+  const jobs: FormattedJob[] = allJobs.map((job: JobRecord) => ({
     id: job.id,
     title: job.job_title,
     company: job.company_name,
@@ -258,7 +284,7 @@ export async function searchJobs(filters: {
 router.post('/api/jobs/search', async (req, res) => {
   try {
     const filters = req.body;
-    const jobs = await searchJobs(filters, 100); // API接口返回更多结果
+    const jobs = await searchJobs(filters);
     
     res.json({
       success: true,
@@ -288,7 +314,7 @@ router.get('/api/jobs/:id', async (req, res) => {
       .single();
     
     if (jobError || !job) {
-      return res.status(404).json({ success: false, error: '岗位不存在' });
+      return res.status(404).json({ success: false, error: '岗位不存在' };
     }
     
     const typedJob = job as unknown as JobRecord;
