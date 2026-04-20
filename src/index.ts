@@ -1581,9 +1581,22 @@ ${currentConditions.join('\n')}
         conversationHistory.push({ role: 'assistant', content: aiResponse })
         
         // 检测AI是否开始问新的期望问题
-        if (aiResponse.includes('期望从事的行业') || aiResponse.includes('职业期望')) {
+        if (aiResponse.includes('期望从事') || aiResponse.includes('职业期望') || 
+            aiResponse.includes('想了解一下您') || aiResponse.includes('您期望的岗位类型') ||
+            aiResponse.includes('您期望在哪个城市') || aiResponse.includes('关于薪资方面') ||
+            aiResponse.includes('最后一个问题啦') || aiResponse.includes('太棒了！我已经完成了您的简历分析')) {
           isAIAskingExpectations = true
           await initProgressiveFilter()
+        }
+        
+        // 【关键修复】如果AI直接说要匹配（在重新匹配的场景下），直接触发匹配！
+        if (aiResponse.includes('为您匹配岗位') || aiResponse.includes('请稍等片刻') || 
+            aiResponse.includes('太感谢您的耐心配合')) {
+          console.log('AI在重新匹配场景下直接说要匹配，直接触发匹配！')
+          // 标记为正在调整条件，避免被后面的逻辑忽略
+          isAdjustingConditions = true
+          // 直接调用岗位匹配！
+          await extractAndCallJobMatch()
         }
       }
       
