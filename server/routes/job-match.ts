@@ -102,98 +102,132 @@ router.post('/api/job-match', async (req, res) => {
     
     console.log('用户原始筛选条件:', originalFilters);
     
-    // 逐步放宽条件的搜索策略
-    const searchStrategies = [
-      // 策略1: 使用所有条件
-      { 
-        filters: { 
-          industry: expectations.industry, 
-          keyword: expectations.jobType, 
-          location: expectations.city 
-        },
-        droppedConditions: []
-      },
-      // 策略2: 去掉薪资要求
-      { 
-        filters: { 
-          industry: expectations.industry, 
-          keyword: expectations.jobType, 
-          location: expectations.city 
-        },
-        droppedConditions: ['薪资']
-      },
-      // 策略3: 去掉其他要求 + 薪资
-      { 
-        filters: { 
-          industry: expectations.industry, 
-          keyword: expectations.jobType, 
-          location: expectations.city 
-        },
-        droppedConditions: ['其他要求', '薪资']
-      },
-      // 策略4: 去掉城市
-      { 
-        filters: { 
-          industry: expectations.industry, 
-          keyword: expectations.jobType 
-        },
-        droppedConditions: ['城市', '其他要求', '薪资']
-      },
-      // 策略5: 去掉岗位类型
-      { 
-        filters: { 
-          industry: expectations.industry 
-        },
-        droppedConditions: ['岗位类型', '城市', '其他要求', '薪资']
-      },
-      // 策略6: 去掉行业（只基于学生画像匹配）
-      { 
-        filters: {},
-        droppedConditions: ['行业', '岗位类型', '城市', '其他要求', '薪资']
-      }
+    // 智能放宽策略 - 确保至少找到5个岗位
+    // 按照优先级排序：先放宽影响最小的条件
+    const relaxOrder = [
+      { key: 'other', label: '其他要求', filterKey: null },
+      { key: 'salary', label: '薪资', filterKey: null },
+      { key: 'city', label: '城市', filterKey: 'location' },
+      { key: 'jobType', label: '岗位类型', filterKey: 'keyword' },
+      { key: 'industry', label: '行业', filterKey: 'industry' }
     ];
     
     let matchedJobs: any[] = [];
     let finalDroppedConditions: string[] = [];
+    let currentFilters = {
+      industry: expectations.industry,
+      keyword: expectations.jobType,
+      location: expectations.city
+    };
+    let currentDropped: string[] = [];
     
-    // 逐个尝试搜索策略
-    for (const strategy of searchStrategies) {
-      console.log('尝试搜索策略, 已放宽条件:', strategy.droppedConditions);
+    console.log('开始智能放宽策略，目标：至少找到5个岗位');
+    console.log('初始条件:', currentFilters);
+    
+    // 第一轮：用所有条件搜索
+    let searchFilters: Record<string, string> = {};
+    Object.entries(currentFilters).forEach(([key, value]) => {
+      if (value) searchFilters[key] = value;
+    });
+    
+    console.log('第1轮搜索（使用所有条件）:', searchFilters);
+    
+    const firstResponse = await fetch('http://localhost:5000/api/jobs/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(searchFilters)
+    });
+    
+    const firstData = await firstResponse.json();
+    let jobs = firstData.jobs || [];
+    
+    if (jobs.length >= 5) {
+      matchedJobs = jobs.slice(0, 5);
+      finalDroppedConditions = [];
+      console.log(`✅ 第1轮成功，找到 ${jobs.length} 个岗位`);
+    } else {
+      console.log(`⚠️ 第1轮只找到 ${jobs.length} 个岗位，开始逐步放宽条件`);
       
-      // 清理空的筛选条件
-      const searchFilters: Record<string, string> = {};
-      Object.entries(strategy.filters).forEach(([key, value]) => {
-        if (value) searchFilters[key] = value;
-      });
+      // 逐步放宽条件
+      for (let i = 0; i < relaxOrder.length; i++) {
+        const relaxItem = relaxOrder[i];
+        
+        // 跳过没有filterKey的项（薪资和其他要求本来就没在搜索条件里）
+        if (!relaxItem.filterKey) {
+          currentDropped.push(relaxItem.label);
+          continue;
+        }
+        
+        // 放宽这个条件
+        console.log(`🔄 第${i + 2}轮：放宽条件 - 去掉${relaxItem.label}`);
+        delete (currentFilters as any)[relaxItem.filterKey];
+        currentDropped.push(relaxItem.label);
+        
+        // 构建新的搜索条件
+        searchFilters = {};
+        Object.entries(currentFilters).forEach(([key, value]) => {
+          if (value) searchFilters[key] = value;
+        });
+        
+        console.log('当前搜索条件:', searchFilters);
+        console.log('已放宽条件:', currentDropped);
+        
+        // 搜索
+        const response = await fetch('http://localhost:5000/api/jobs/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(searchFilters)
+        });
+        
+        const data = await response.json();
+        jobs = data.jobs || [];
+        
+        console.log(`本轮找到 ${jobs.length} 个岗位`);
+        
+        // 如果找到足够的岗位，就停止
+        if (jobs.length >= 5) {
+          matchedJobs = jobs.slice(0, 5);
+          finalDroppedConditions = [...currentDropped];
+          console.log(`✅ 成功！找到 ${jobs.length} 个岗位，已放宽条件:`, finalDroppedConditions);
+          break;
+        }
+      }
       
-      console.log('当前搜索条件:', searchFilters);
-      
-      // 调用岗位搜索API
-      const searchResponse = await fetch('http://localhost:5000/api/jobs/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(searchFilters)
-      });
-      
-      const searchData = await searchResponse.json();
-      const jobs = searchData.jobs || [];
-      
-      if (jobs.length > 0) {
-        matchedJobs = jobs.slice(0, 5);
-        finalDroppedConditions = strategy.droppedConditions;
-        console.log(`找到 ${matchedJobs.length} 个岗位，已放宽条件:`, finalDroppedConditions);
-        break;
+      // 如果所有条件都放宽了还是不够5个，就用现有的，或者获取推荐岗位
+      if (matchedJobs.length === 0) {
+        console.log('⚠️ 所有条件都放宽了，尝试获取推荐岗位');
+        
+        // 获取一些推荐岗位（不设任何条件）
+        const allResponse = await fetch('http://localhost:5000/api/jobs/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({})
+        });
+        
+        const allData = await allResponse.json();
+        const allJobs = allData.jobs || [];
+        
+        if (allJobs.length > 0) {
+          // 如果有岗位，取前5个
+          matchedJobs = allJobs.slice(0, 5);
+          finalDroppedConditions = ['行业', '岗位类型', '城市', '其他要求', '薪资'];
+          console.log(`🎯 使用推荐岗位: ${matchedJobs.length} 个`);
+        } else {
+          console.log('❌ 没有找到任何岗位');
+        }
       }
     }
     
     // 构建提示信息
     let friendlyMessage = '';
-    if (finalDroppedConditions.length === 0) {
-      friendlyMessage = '岗位匹配分析已完成！为您找到了5个最匹配的岗位，请查看左侧卡片了解详细分析结果。';
+    if (matchedJobs.length === 0) {
+      friendlyMessage = '抱歉，暂时没有找到合适的岗位。请稍后再试或调整您的期望条件。';
+    } else if (finalDroppedConditions.length === 0) {
+      friendlyMessage = `岗位匹配分析已完成！为您找到了${matchedJobs.length}个最匹配的岗位，请查看左侧卡片了解详细分析结果。`;
     } else if (finalDroppedConditions.length < 5) {
-      friendlyMessage = `为了给您找到合适的岗位，我们放宽了以下条件：${finalDroppedConditions.join('、')}。以下是基于您的学生画像推荐的岗位，请查看左侧卡片！`;
+      friendlyMessage = `为了给您找到${matchedJobs.length}个合适的岗位，我们放宽了以下条件：${finalDroppedConditions.join('、')}。以下是基于您的学生画像推荐的岗位，请查看左侧卡片！`;
     } else {
-      friendlyMessage = `抱歉，根据您的具体条件暂时没有找到匹配岗位。我们已基于您的简历背景为您推荐了以下岗位，放宽了条件：${finalDroppedConditions.join('、')}。请查看左侧卡片！`;
+      friendlyMessage = `根据您的具体条件没有找到足够的匹配岗位。我们已基于您的简历背景为您推荐了${matchedJobs.length}个岗位，放宽了条件：${finalDroppedConditions.join('、')}。请查看左侧卡片！`;
     }
     
     console.log('最终匹配岗位数:', matchedJobs.length);
