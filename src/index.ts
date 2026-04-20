@@ -598,6 +598,11 @@ function createApp() {
   let progressiveFilterInitialized = false  // 是否已初始化渐进式筛选
   let progressiveFilterCounts: number[] = []  // 每步筛选后的岗位数量
   
+  // 调整条件状态
+  let isAdjustingConditions = false  // 是否正在调整条件
+  let adjustingStep = 0  // 调整步骤：0=选择修改项，1-5=修改对应条件
+  let conditionsToModify: string[] = []  // 要修改的条件列表
+  
   // 更新左侧卡片显示画像数据（提前定义，供 clearAllResumeData 使用）
   function updateProfileCard(profile: {
     resumeScore?: any
@@ -1196,6 +1201,310 @@ function createApp() {
     return div.innerHTML
   }
 
+  // ========== 调整条件相关函数 ==========
+  
+  // 显示调整选项
+  async function showAdjustOptions(userMessage: string) {
+    // 添加用户消息
+    addMessage(userMessage, true)
+    messageInput.value = ''
+    
+    // 进入调整模式
+    isAdjustingConditions = true
+    adjustingStep = 0
+    
+    // 显示当前条件和修改选项
+    const currentConditions = []
+    const questionKeys = ['industry', 'jobType', 'city', 'salary', 'other']
+    const labels = ['行业', '岗位类型', '城市', '薪资范围', '其他要求']
+    
+    questionKeys.forEach((key, idx) => {
+      if (careerExpectations[key as keyof CareerExpectations]) {
+        currentConditions.push(`${idx + 1}. ${labels[idx]}: ${careerExpectations[key as keyof CareerExpectations]}`)
+      }
+    })
+    
+    const optionsMessage = `好的，我来帮您调整匹配条件！
+
+📋 当前条件：
+${currentConditions.join('\n')}
+
+请告诉我您想修改哪个条件？
+1. 行业
+2. 岗位类型
+3. 城市
+4. 薪资范围
+5. 其他要求
+6. 全部重新选择
+
+或者直接告诉我您想怎么调整，我来帮您重新匹配！`
+    
+    // 显示AI回复
+    const aiMessageDiv = addMessage(optionsMessage, false)
+    conversationHistory.push({ role: 'assistant', content: optionsMessage })
+  }
+  
+  // 处理调整步骤
+  async function handleAdjustmentStep(message: string) {
+    const questionKeys = ['industry', 'jobType', 'city', 'salary', 'other']
+    const labels = ['行业', '岗位类型', '城市', '薪资范围', '其他要求']
+    
+    // 步骤0：选择要修改的条件
+    if (adjustingStep === 0) {
+      addMessage(message, true)
+      messageInput.value = ''
+      
+      // 检查用户选择了哪个选项
+      let selectedOption = -1
+      
+      // 检查数字选项
+      if (message.includes('1') || message.includes('行业')) selectedOption = 0
+      else if (message.includes('2') || message.includes('岗位')) selectedOption = 1
+      else if (message.includes('3') || message.includes('城市')) selectedOption = 2
+      else if (message.includes('4') || message.includes('薪资')) selectedOption = 3
+      else if (message.includes('5') || message.includes('其他')) selectedOption = 4
+      else if (message.includes('6') || message.includes('全部') || message.includes('重新')) {
+        // 全部重新选择
+        isAdjustingConditions = false
+        adjustingStep = 0
+        
+        // 重置条件
+        careerExpectations = {}
+        currentExpectationQuestion = 0
+        
+        // 重新初始化渐进式筛选
+        await initProgressiveFilter()
+        
+        // 让AI重新问问题
+        const restartMessage = '好的，我们重新开始！请告诉我您的职业期望：\n\n1. 期望从事的行业（如：互联网、金融、教育、医疗等）'
+        const aiMessageDiv = addMessage(restartMessage, false)
+        conversationHistory.push({ role: 'assistant', content: restartMessage })
+        isAIAskingExpectations = true
+        return
+      }
+      
+      if (selectedOption >= 0) {
+        // 用户选择了一个具体选项
+        conditionsToModify = [selectedOption.toString()]
+        adjustingStep = 1
+        
+        const askMessage = `好的，请告诉我您新的${labels[selectedOption]}是什么？`
+        const aiMessageDiv = addMessage(askMessage, false)
+        conversationHistory.push({ role: 'assistant', content: askMessage })
+      } else {
+        // 用户直接说了新条件，尝试理解
+        isAdjustingConditions = false
+        adjustingStep = 0
+        
+        // 把用户消息作为新的期望，重新筛选
+        await reMatchWithNewMessage(message)
+      }
+      return
+    }
+    
+    // 步骤1：获取新条件并重新匹配
+    if (adjustingStep === 1) {
+      addMessage(message, true)
+      messageInput.value = ''
+      
+      const selectedOption = parseInt(conditionsToModify[0])
+      const key = questionKeys[selectedOption]
+      
+      // 更新条件
+      careerExpectations[key as keyof CareerExpectations] = message.trim()
+      
+      // 显示处理中
+      const aiMessageDiv = addMessage('好的，正在根据新条件重新匹配岗位……', false)
+      const aiTextElement = aiMessageDiv?.querySelector('.ai-message') as HTMLElement
+      
+      // 重置状态
+      isAdjustingConditions = false
+      adjustingStep = 0
+      
+      // 隐藏发送按钮，显示停止按钮
+      if (sendBtn) sendBtn.classList.add('hidden')
+      if (stopBtn) stopBtn.classList.remove('hidden')
+      
+      try {
+        isGenerating = true
+        
+        // 重新初始化渐进式筛选，用新条件
+        await initProgressiveFilter()
+        
+        // 模拟逐步筛选
+        for (let i = 0; i < questionKeys.length; i++) {
+          const key = questionKeys[i]
+          const value = careerExpectations[key as keyof CareerExpectations]
+          if (value) {
+            await executeProgressiveFilterStep(i + 1, value)
+          }
+        }
+        
+        // 获取最终筛选结果
+        const filterResult = await getFinalFilteredJobs()
+        
+        // 从 localStorage 获取学生画像
+        const studentProfile = JSON.parse(localStorage.getItem('studentProfile') || '{}')
+        
+        // 进行AI匹配
+        let result: any = null
+        if (filterResult && filterResult.jobs && filterResult.jobs.length > 0) {
+          result = await performAIMatching(filterResult.jobs, studentProfile, filterResult.message)
+        } else {
+          // 回退到传统方式
+          const matchRequest = {
+            expectations: careerExpectations,
+            profile: studentProfile
+          }
+          
+          const response = await fetch('/api/job-match', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(matchRequest)
+          })
+          
+          result = await response.json()
+        }
+        
+        // 保存匹配分析结果
+        if (result.analysis) {
+          const existingProfile = JSON.parse(localStorage.getItem('studentProfile') || '{}')
+          existingProfile.jobMatch = result.analysis
+          localStorage.setItem('studentProfile', JSON.stringify(existingProfile))
+          
+          // 更新卡片UI
+          updateProfileCard(existingProfile)
+        }
+        
+        // 显示结果
+        if (aiTextElement) {
+          aiTextElement.textContent = result.message || '已根据新条件重新匹配，请查看左侧卡片！'
+        }
+        
+        conversationHistory.push({ role: 'assistant', content: result.message || '已根据新条件重新匹配，请查看左侧卡片！' })
+        
+      } catch (error) {
+        console.error('重新匹配出错:', error)
+        if (aiTextElement) {
+          aiTextElement.textContent = '抱歉，重新匹配时出现问题，请稍后重试。'
+        }
+      } finally {
+        isGenerating = false
+        
+        // 恢复发送按钮
+        if (sendBtn) {
+          sendBtn.classList.remove('hidden')
+          sendBtn.style.opacity = '1'
+          sendBtn.style.pointerEvents = 'auto'
+        }
+        if (stopBtn) stopBtn.classList.add('hidden')
+      }
+      return
+    }
+  }
+  
+  // 用新消息重新匹配
+  async function reMatchWithNewMessage(message: string) {
+    // 显示处理中
+    const aiMessageDiv = addMessage('好的，正在理解您的新需求并重新匹配……', false)
+    const aiTextElement = aiMessageDiv?.querySelector('.ai-message') as HTMLElement
+    
+    // 隐藏发送按钮，显示停止按钮
+    if (sendBtn) sendBtn.classList.add('hidden')
+    if (stopBtn) stopBtn.classList.remove('hidden')
+    
+    try {
+      isGenerating = true
+      
+      // 把新消息交给AI处理，让AI理解用户想怎么调整
+      const adjustPrompt = `用户对之前的岗位匹配结果不满意，想要调整。用户说："${message}"
+
+请根据用户的需求，重新询问用户的职业期望（5个问题），以便重新匹配岗位。
+
+请用友好的方式询问用户新的期望条件。`
+      
+      // 重置状态
+      isAIAskingExpectations = false
+      isAdjustingConditions = false
+      careerExpectations = {}
+      currentExpectationQuestion = 0
+      
+      // 让AI处理
+      conversationHistory.push({ role: 'user', content: message })
+      conversationHistory.push({ role: 'assistant', content: '好的，我来帮您重新匹配！' })
+      
+      // 清除AI的回复，让AI重新生成
+      if (aiTextElement) {
+        aiTextElement.textContent = ''
+      }
+      
+      // 重新调用AI对话
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: conversationHistory })
+      })
+      
+      if (response.ok) {
+        const reader = response.body?.getReader()
+        const decoder = new TextDecoder()
+        let aiResponse = ''
+        
+        if (reader) {
+          while (isGenerating) {
+            const { done, value } = await reader.read()
+            if (done) break
+            
+            const chunk = decoder.decode(value)
+            const lines = chunk.split('\n')
+            
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                const data = line.slice(6)
+                if (data === '[DONE]') {
+                  isGenerating = false
+                  break
+                }
+                
+                try {
+                  const parsed = JSON.parse(data)
+                  if (parsed.content && aiTextElement) {
+                    aiResponse += parsed.content
+                    aiTextElement.textContent = aiResponse
+                  }
+                } catch {}
+              }
+            }
+          }
+        }
+        
+        conversationHistory.push({ role: 'assistant', content: aiResponse })
+        
+        // 检测AI是否开始问新的期望问题
+        if (aiResponse.includes('期望从事的行业') || aiResponse.includes('职业期望')) {
+          isAIAskingExpectations = true
+          await initProgressiveFilter()
+        }
+      }
+      
+    } catch (error) {
+      console.error('重新匹配出错:', error)
+      if (aiTextElement) {
+        aiTextElement.textContent = '抱歉，处理您的调整需求时出现问题，请稍后重试。'
+      }
+    } finally {
+      isGenerating = false
+      
+      // 恢复发送按钮
+      if (sendBtn) {
+        sendBtn.classList.remove('hidden')
+        sendBtn.style.opacity = '1'
+        sendBtn.style.pointerEvents = 'auto'
+      }
+      if (stopBtn) stopBtn.classList.add('hidden')
+    }
+  }
+  
   // ========== 渐进式筛选相关函数 ==========
   
   // 初始化渐进式筛选
@@ -1638,6 +1947,26 @@ ${jobsSummary}
     if (isGenerating) {
       console.log('Already generating, ignoring send - isGenerating:', isGenerating)
       return
+    }
+    
+    const message = messageInput?.value.trim()
+    
+    // 检查是否要调整条件
+    if (message) {
+      const adjustKeywords = ['调整', '修改', '重新匹配', '换一下', '不满意', '换岗位', '重新筛选', '换条件', '改一下', '重新选', '重新找']
+      const wantsToAdjust = adjustKeywords.some(keyword => message.includes(keyword))
+      
+      if (wantsToAdjust && Object.keys(careerExpectations).length > 0) {
+        console.log('用户想要调整条件，显示修改选项')
+        await showAdjustOptions(message)
+        return
+      }
+      
+      // 如果正在调整条件，处理调整流程
+      if (isAdjustingConditions) {
+        await handleAdjustmentStep(message)
+        return
+      }
     }
     
     // 重置标志
@@ -2253,6 +2582,13 @@ ${jobsSummary}
           
           // 从对话历史中提取用户的5个回答
           extractAndCallJobMatch()
+        }
+        
+        // 检测岗位匹配完成后，用户是否想要调整
+        if (finalContentToSave.includes('岗位匹配分析已完成') || 
+            finalContentToSave.includes('请查看左侧卡片')) {
+          console.log('岗位匹配完成，准备提供调整选项')
+          // 这里我们让AI自然地询问用户是否满意，或者在用户主动要求调整时处理
         }
       }
       // ==================================================
