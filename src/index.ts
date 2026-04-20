@@ -4236,23 +4236,14 @@ ${resumeData.courses ? '主修课程：' + resumeData.courses : ''}
     updateProfileCard(profile)
   })
   
-  // 页面加载时初始化检查：读取 localStorage 并更新卡片
+  // 页面加载时初始化检查：不自动读取 localStorage 显示卡片
   function initProfileCard() {
-    try {
-      const storedProfile = localStorage.getItem('studentProfile')
-      if (storedProfile) {
-        const profile = JSON.parse(storedProfile)
-        if (profile.resumeScore || profile.abilityAnalysis || profile.studentProfile) {
-          updateProfileCard(profile)
-        }
-      }
-    } catch (error) {
-      console.error('Error initializing profile card:', error)
-    }
+    // 页面刷新时不自动显示之前的卡片，保持左侧为空
+    // 只有当用户再次上传简历或对话收到新数据时才显示卡片
   }
   
-  // 初始化时检查 localStorage 并更新卡片
-  initProfileCard()
+  // 初始化时不自动加载历史卡片
+  // initProfileCard()
 }
 
 document.addEventListener('DOMContentLoaded', createApp)
