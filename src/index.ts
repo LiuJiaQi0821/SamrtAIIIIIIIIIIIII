@@ -1899,6 +1899,251 @@ ${currentConditions.join('\n')}
     }
   }
   
+  // ========== 职业规划报告相关函数 ==========
+  
+  // 生成职业规划报告
+  async function generateCareerReport() {
+    try {
+      console.log('开始生成职业规划报告...')
+      
+      // 从 localStorage 获取数据
+      const studentProfile = JSON.parse(localStorage.getItem('studentProfile') || '{}')
+      
+      const response = await fetch('/api/career-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          profile: studentProfile,
+          matchedJobs: studentProfile.jobMatch?.matchedJobs || [],
+          userExpectations: careerExpectations
+        })
+      })
+      
+      if (!response.ok) {
+        throw new Error('生成报告失败')
+      }
+      
+      const result = await response.json()
+      
+      if (result.success) {
+        console.log('职业规划报告生成成功')
+        
+        // 保存报告到 localStorage
+        localStorage.setItem('careerReport', JSON.stringify(result.report))
+        
+        // 展示报告卡片
+        showCareerReportCard(result.report)
+        
+        return result.report
+      } else {
+        throw new Error(result.error || '生成失败')
+      }
+    } catch (error) {
+      console.error('生成职业规划报告出错:', error)
+      throw error
+    }
+  }
+  
+  // 展示职业规划报告卡片
+  function showCareerReportCard(report: any) {
+    // 查找或创建报告展示区域
+    let reportContainer = document.getElementById('career-report-container')
+    
+    if (!reportContainer) {
+      reportContainer = document.createElement('div')
+      reportContainer.id = 'career-report-container'
+      reportContainer.className = 'career-report-card'
+      
+      // 插入到合适的位置（在岗位匹配卡片后面）
+      const profileCard = document.querySelector('.profile-card') || document.querySelector('.card')
+      if (profileCard && profileCard.parentNode) {
+        profileCard.parentNode.insertBefore(reportContainer, profileCard.nextSibling)
+      }
+    }
+    
+    // 构建报告HTML
+    reportContainer.innerHTML = `
+      <div class="report-header">
+        <h3>📄 职业规划报告</h3>
+        <span class="report-time">${new Date().toLocaleString()}</span>
+      </div>
+      <div class="report-content">
+        <p class="report-status">报告已生成</p>
+        <div class="download-section">
+          <h4>下载报告</h4>
+          <div class="download-buttons">
+            <button onclick="exportReport('markdown')" class="download-btn markdown-btn">
+              📝 Markdown格式
+            </button>
+            <button onclick="exportReport('pdf')" class="download-btn pdf-btn" disabled>
+              📕 PDF格式（开发中）
+            </button>
+            <button onclick="exportReport('word')" class="download-btn word-btn" disabled>
+              📘 Word格式（开发中）
+            </button>
+          </div>
+        </div>
+      </div>
+    `
+    
+    // 绑定导出函数到全局
+    ;(window as any).exportReport = exportReport
+    
+    // 添加样式
+    addReportStyles()
+  }
+  
+  // 导出报告
+  async function exportReport(format: string) {
+    try {
+      const reportData = JSON.parse(localStorage.getItem('careerReport') || '{}')
+      
+      if (!reportData || !reportData.id) {
+        alert('没有可导出的报告')
+        return
+      }
+      
+      console.log(`正在导出${format}格式的报告...`)
+      
+      const response = await fetch('/api/career-report/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          format: format,
+          reportData: reportData
+        })
+      })
+      
+      if (!response.ok) {
+        throw new Error('导出失败')
+      }
+      
+      // 获取文件blob并下载
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `职业规划报告_${Date.now()}.${format === 'pdf' ? 'pdf' : format === 'word' ? 'docx' : 'md'}`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      
+      console.log(`${format}格式报告导出成功`)
+    } catch (error) {
+      console.error('导出报告失败:', error)
+      alert('导出失败，请稍后重试')
+    }
+  }
+  
+  // 添加报告卡片样式
+  function addReportStyles() {
+    // 避免重复添加
+    if (document.getElementById('career-report-styles')) return
+    
+    const style = document.createElement('style')
+    style.id = 'career-report-styles'
+    style.textContent = `
+      .career-report-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 12px;
+        padding: 20px;
+        margin-top: 16px;
+        color: white;
+        box-shadow: 0 8px 24px rgba(102, 126, 234, 0.3);
+        animation: slideInUp 0.5s ease-out;
+      }
+      
+      @keyframes slideInUp {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      
+      .report-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+      }
+      
+      .report-header h3 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 600;
+      }
+      
+      .report-time {
+        font-size: 12px;
+        opacity: 0.9;
+      }
+      
+      .report-content {
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        padding: 16px;
+      }
+      
+      .report-status {
+        margin: 0 0 16px 0;
+        font-size: 14px;
+      }
+      
+      .download-section h4 {
+        margin: 0 0 12px 0;
+        font-size: 14px;
+        font-weight: 500;
+      }
+      
+      .download-buttons {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      
+      .download-btn {
+        padding: 10px 16px;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 500;
+        transition: all 0.3s ease;
+        background: rgba(255, 255, 255, 0.2);
+        color: white;
+      }
+      
+      .download-btn:hover:not(:disabled) {
+        background: rgba(255, 255, 255, 0.3);
+        transform: translateY(-2px);
+      }
+      
+      .download-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      
+      .markdown-btn:hover:not(:disabled) {
+        background: rgba(76, 175, 80, 0.6);
+      }
+      
+      .pdf-btn:hover:not(:disabled) {
+        background: rgba(244, 67, 54, 0.6);
+      }
+      
+      .word-btn:hover:not(:disabled) {
+        background: rgba(33, 150, 243, 0.6);
+      }
+    `
+    
+    document.head.appendChild(style)
+  }
+  
   // 对筛选出的岗位进行AI匹配度打分
   async function performAIMatching(jobs: any[], profile: any, baseMessage: string) {
     console.log('开始AI匹配度打分，岗位数:', jobs.length)
@@ -2820,6 +3065,29 @@ ${jobsSummary}
             finalContentToSave.includes('请查看左侧卡片')) {
           console.log('岗位匹配完成，准备提供调整选项')
           // 这里我们让AI自然地询问用户是否满意，或者在用户主动要求调整时处理
+        }
+        
+        // 【新增】检测AI是否要生成职业规划报告
+        if (finalContentToSave.includes('【GENERATE_REPORT】')) {
+          console.log('✅ 检测到报告生成标记【GENERATE_REPORT】，开始生成报告！')
+          
+          // 从回复中移除标记（不展示给用户）
+          const cleanResponse = finalContentToSave.replace('【GENERATE_REPORT】', '').trim()
+          if (aiTextElement) {
+            aiTextElement.textContent = cleanResponse
+          }
+          finalContentToSave = cleanResponse
+          conversationHistory[conversationHistory.length - 1] = { role: 'assistant', content: cleanResponse }
+          
+          // 生成职业规划报告
+          try {
+            await generateCareerReport()
+            console.log('✅ 职业规划报告生成并展示完成')
+          } catch (error) {
+            console.error('❌ 生成职业规划报告失败:', error)
+            // 在对话框中显示错误信息
+            addMessage('抱歉，生成职业规划报告时出现问题，请稍后重试。', false)
+          }
         }
       }
       // ==================================================
