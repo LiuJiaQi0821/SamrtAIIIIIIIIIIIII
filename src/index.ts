@@ -87,16 +87,8 @@ function createApp() {
           <div class="hidden lg:flex items-center px-4 py-3">
             <h2 class="text-xl font-semibold text-gray-700">职业规划过程展示</h2>
           </div>
-          <div class="flex-1 flex items-center justify-center p-8">
-            <div class="text-center">
-              <div class="w-24 h-24 mx-auto mb-4 rounded-full bg-white/60 flex items-center justify-center shadow-sm">
-                <svg class="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
-                </svg>
-              </div>
-              <p class="text-gray-500 text-sm">暂无卡片内容</p>
-              <p class="text-gray-400 text-xs mt-1">上传简历后将在此展示分析结果</p>
-            </div>
+          <!-- 卡片内容区域（初始为空，只有收到JSON数据后才展示） -->
+          <div id="cards-content" class="flex-1 overflow-auto p-4 lg:p-6">
           </div>
         </div>
       </aside>
@@ -627,39 +619,17 @@ function createApp() {
     studentProfile?: any
     jobMatch?: any
   }) {
-    const cardsPanel = document.getElementById('cards-panel')
-    if (!cardsPanel) return
+    const cardsContent = document.getElementById('cards-content')
+    if (!cardsContent) return
     
-    // 如果没有任何画像数据，恢复默认状态
+    // 如果没有任何画像数据，保持内容区域为空
     if (!profile.resumeScore && !profile.abilityAnalysis && !profile.studentProfile && !profile.jobMatch) {
-      cardsPanel.innerHTML = `
-        <div class="h-full flex flex-col">
-          <div class="hidden lg:flex items-center px-4 py-3">
-            <h2 class="text-xl font-semibold text-gray-700">职业规划过程展示</h2>
-          </div>
-          <div class="flex-1 flex items-center justify-center p-8">
-            <div class="text-center">
-              <div class="w-24 h-24 mx-auto mb-4 rounded-full bg-white/60 flex items-center justify-center shadow-sm">
-                <svg class="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
-                </svg>
-              </div>
-              <p class="text-gray-500 text-sm">暂无卡片内容</p>
-              <p class="text-gray-400 text-xs mt-1">上传简历后将在此展示分析结果</p>
-            </div>
-          </div>
-        </div>
-      `
+      cardsContent.innerHTML = ''
       return
     }
     
     let html = `
-      <div class="h-full flex flex-col">
-        <div class="hidden lg:flex items-center px-4 py-3">
-          <h2 class="text-xl font-semibold text-gray-700">职业规划过程展示</h2>
-        </div>
-        <div class="flex-1 overflow-auto p-4 lg:p-6">
-          <div class="grid gap-4 lg:gap-6">
+      <div class="grid gap-4 lg:gap-6">
     `
     
     // 简历评分卡片
@@ -1013,11 +983,10 @@ function createApp() {
     }
     
     html += `
-        </div>
       </div>
     `
     
-    cardsPanel.innerHTML = html
+    cardsContent.innerHTML = html
   }
   
   // 清除所有简历相关数据（新上传简历时调用）
