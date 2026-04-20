@@ -268,10 +268,81 @@ function filterJobs(jobs: JobRecord[], filters: FilterState['filters'], step: nu
   return filtered;
 }
 
+// 根据学生画像进行初步筛选
+function filterByProfile(jobs: JobRecord[], profile: any): JobRecord[] {
+  if (!profile) {
+    return jobs;
+  }
+  
+  console.log('根据学生画像进行初步筛选...');
+  let filtered = [...jobs];
+  
+  try {
+    // 从学生画像中提取关键信息
+    const studentProfile = profile.studentProfile || profile;
+    const abilityAnalysis = profile.abilityAnalysis || {};
+    
+    // 提取专业信息
+    let major = '';
+    let degree = '';
+    let skills: string[] = [];
+    
+    if (studentProfile) {
+      // 尝试从教育背景获取专业
+      if (studentProfile.education) {
+        if (typeof studentProfile.education === 'string') {
+          major = studentProfile.education;
+        } else if (studentProfile.education.major) {
+          major = studentProfile.education.major;
+        }
+        if (studentProfile.education.degree) {
+          degree = studentProfile.education.degree;
+        }
+      }
+    }
+    
+    // 从能力分析获取技能
+    if (abilityAnalysis['专业技能'] && Array.isArray(abilityAnalysis['专业技能'])) {
+      skills = abilityAnalysis['专业技能'];
+    }
+    
+    console.log('画像提取信息 - 专业:', major, '学历:', degree, '技能:', skills);
+    
+    // 如果有专业信息，优先筛选相关行业和岗位
+    if (major || skills.length > 0) {
+      const keywords = [major, ...skills].filter(k => k && k.trim());
+      
+      if (keywords.length > 0) {
+        console.log('使用关键词进行初步筛选:', keywords);
+        filtered = filtered.filter(job => {
+          // 只要岗位标题、描述、行业中包含任意一个关键词就算匹配
+          const searchText = `${job.job_title} ${job.job_description} ${job.industry}`.toLowerCase();
+          return keywords.some(keyword => 
+            keyword && searchText.includes(keyword.toLowerCase())
+          );
+        });
+        console.log(`画像初步筛选后: ${filtered.length} 个岗位`);
+      }
+    }
+  } catch (error) {
+    console.error('画像筛选出错:', error);
+    // 出错时返回原列表
+    return jobs;
+  }
+  
+  // 确保至少有一些岗位
+  if (filtered.length === 0) {
+    console.log('画像筛选结果为空，使用全部岗位');
+    return jobs;
+  }
+  
+  return filtered;
+}
+
 // 初始化渐进式筛选会话
 router.post('/api/progressive-filter/init', async (req, res) => {
   try {
-    const { sessionId } = req.body;
+    const { sessionId, profile } = req.body;
     
     if (!sessionId) {
       return res.status(400).json({ success: false, error: 'sessionId is required' });
@@ -283,11 +354,18 @@ router.post('/api/progressive-filter/init', async (req, res) => {
     const allJobs = await getAllJobs();
     console.log(`加载了 ${allJobs.length} 个岗位数据`);
     
+    // 根据学生画像进行初步筛选（如果有profile）
+    let initialJobs = allJobs;
+    if (profile) {
+      initialJobs = filterByProfile(allJobs, profile);
+      console.log(`基于画像筛选后: ${initialJobs.length} 个岗位`);
+    }
+    
     // 创建筛选状态
     const filterState: FilterState = {
       step: 0,
       filters: {},
-      filteredJobIds: allJobs.map(job => job.id),
+      filteredJobIds: initialJobs.map(job => job.id),
       allJobs,
       lastUpdated: Date.now()
     };
@@ -298,7 +376,10 @@ router.post('/api/progressive-filter/init', async (req, res) => {
     res.json({
       success: true,
       totalJobs: allJobs.length,
-      message: `已加载 ${allJobs.length} 个岗位数据`
+      initialFiltered: initialJobs.length,
+      message: profile 
+        ? `已加载 ${allJobs.length} 个岗位数据，基于画像初步筛选出 ${initialJobs.length} 个岗位`
+        : `已加载 ${allJobs.length} 个岗位数据`
     });
     
   } catch (error) {
