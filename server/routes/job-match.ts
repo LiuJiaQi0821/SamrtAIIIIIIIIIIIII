@@ -629,11 +629,11 @@ router.post('/api/job-match', async (req, res) => {
     if (matchedJobs.length === 0) {
       friendlyMessage = '抱歉，暂时没有找到合适的岗位。请稍后再试或调整您的期望条件。';
     } else if (finalDroppedConditions.length === 0) {
-      friendlyMessage = `岗位匹配分析已完成！为您找到了${matchedJobs.length}个最匹配的岗位，请查看左侧卡片了解详细分析结果。`;
+      friendlyMessage = `岗位匹配分析已完成！为您找到了${matchedJobs.length}个最匹配的岗位，请查看左侧卡片了解详细分析结果。\n\n您需要我为您输出一份职业规划报告吗？我可以基于您的简历和匹配的岗位，为您制定详细的职业发展路径规划。`;
     } else if (finalDroppedConditions.length < 5) {
-      friendlyMessage = `为了给您找到${matchedJobs.length}个合适的岗位，我们放宽了以下条件：${finalDroppedConditions.join('、')}。以下是基于您的学生画像推荐的岗位，请查看左侧卡片！`;
+      friendlyMessage = `为了给您找到${matchedJobs.length}个合适的岗位，我们放宽了以下条件：${finalDroppedConditions.join('、')}。以下是基于您的学生画像推荐的岗位，请查看左侧卡片！\n\n您需要我为您输出一份职业规划报告吗？我可以基于您的简历和匹配的岗位，为您制定详细的职业发展路径规划。`;
     } else {
-      friendlyMessage = `根据您的具体条件没有找到足够的匹配岗位。我们已基于您的简历背景为您推荐了${matchedJobs.length}个岗位，放宽了条件：${finalDroppedConditions.join('、')}。请查看左侧卡片！`;
+      friendlyMessage = `根据您的具体条件没有找到足够的匹配岗位。我们已基于您的简历背景为您推荐了${matchedJobs.length}个岗位，放宽了条件：${finalDroppedConditions.join('、')}。请查看左侧卡片！\n\n您需要我为您输出一份职业规划报告吗？我可以基于您的简历和匹配的岗位，为您制定详细的职业发展路径规划。`;
     }
     
     console.log('最终匹配岗位数:', matchedJobs.length);

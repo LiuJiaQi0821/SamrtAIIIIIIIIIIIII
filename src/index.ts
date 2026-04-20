@@ -1478,10 +1478,10 @@ ${currentConditions.join('\n')}
         
         // 显示结果
         if (aiTextElement) {
-          aiTextElement.textContent = result.message || '已根据新条件重新匹配，请查看左侧卡片！'
+          aiTextElement.textContent = result.message || '已根据新条件重新匹配，请查看左侧卡片！\n\n您需要我为您输出一份职业规划报告吗？我可以基于您的简历和匹配的岗位，为您制定详细的职业发展路径规划。'
         }
         
-        conversationHistory.push({ role: 'assistant', content: result.message || '已根据新条件重新匹配，请查看左侧卡片！' })
+        conversationHistory.push({ role: 'assistant', content: result.message || '已根据新条件重新匹配，请查看左侧卡片！\n\n您需要我为您输出一份职业规划报告吗？我可以基于您的简历和匹配的岗位，为您制定详细的职业发展路径规划。' })
         
       } catch (error) {
         console.error('重新匹配出错:', error)
@@ -1837,11 +1837,11 @@ ${currentConditions.join('\n')}
       
       // 显示匹配分析结果
       if (aiTextElement) {
-        aiTextElement.textContent = result.message || '岗位匹配分析已完成，请查看左侧卡片！'
+        aiTextElement.textContent = result.message || '岗位匹配分析已完成，请查看左侧卡片！\n\n您需要我为您输出一份职业规划报告吗？我可以基于您的简历和匹配的岗位，为您制定详细的职业发展路径规划。'
       }
       
       // 保存到历史
-      conversationHistory.push({ role: 'assistant', content: result.message || '岗位匹配分析已完成，请查看左侧卡片！' })
+      conversationHistory.push({ role: 'assistant', content: result.message || '岗位匹配分析已完成，请查看左侧卡片！\n\n您需要我为您输出一份职业规划报告吗？我可以基于您的简历和匹配的岗位，为您制定详细的职业发展路径规划。' })
       
     } catch (error) {
       console.error('Job match error:', error)
@@ -2074,7 +2074,7 @@ ${jobsSummary}
     // 返回结果
     return {
       success: true,
-      message: baseMessage || '岗位匹配分析已完成，请查看左侧卡片！',
+      message: baseMessage || '岗位匹配分析已完成，请查看左侧卡片！\n\n您需要我为您输出一份职业规划报告吗？我可以基于您的简历和匹配的岗位，为您制定详细的职业发展路径规划。',
       analysis: matchAnalysis,
       jobs: jobs
     };
@@ -2250,12 +2250,12 @@ ${jobsSummary}
           
           // 显示匹配分析结果
           if (aiTextElement) {
-            aiTextElement.textContent = result.message || '岗位匹配分析已完成，请查看左侧卡片！'
+            aiTextElement.textContent = result.message || '岗位匹配分析已完成，请查看左侧卡片！\n\n您需要我为您输出一份职业规划报告吗？我可以基于您的简历和匹配的岗位，为您制定详细的职业发展路径规划。'
           }
           
           // 保存到历史
           conversationHistory.push({ role: 'user', content: message })
-          conversationHistory.push({ role: 'assistant', content: result.message || '岗位匹配分析已完成，请查看左侧卡片！' })
+          conversationHistory.push({ role: 'assistant', content: result.message || '岗位匹配分析已完成，请查看左侧卡片！\n\n您需要我为您输出一份职业规划报告吗？我可以基于您的简历和匹配的岗位，为您制定详细的职业发展路径规划。' })
           
         } catch (error) {
           console.error('Job match error:', error)

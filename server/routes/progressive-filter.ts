@@ -851,7 +851,7 @@ router.post('/api/progressive-filter-v2/final', async (req, res) => {
     
     res.json({
       success: true,
-      message: `岗位匹配分析已完成！为您找到了${jobs.length}个最匹配的岗位，请查看左侧卡片！`,
+      message: `岗位匹配分析已完成！为您找到了${jobs.length}个最匹配的岗位，请查看左侧卡片！\n\n您需要我为您输出一份职业规划报告吗？我可以基于您的简历和匹配的岗位，为您制定详细的职业发展路径规划。`,
       jobs,
       totalCount: jobs.length,
       candidateCount: filterState.currentFilteredJobIds.length
