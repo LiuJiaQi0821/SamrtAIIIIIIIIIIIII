@@ -1970,18 +1970,19 @@ ${currentConditions.join('\n')}
       <div class="report-content">
         <p class="report-status">报告已生成</p>
         <div class="download-section">
-          <h4>下载报告</h4>
+          <h4>下载报告（支持多种格式）</h4>
           <div class="download-buttons">
-            <button onclick="exportReport('markdown')" class="download-btn markdown-btn">
-              📝 Markdown格式
+            <button onclick="exportReport('markdown')" class="download-btn markdown-btn" title="下载Markdown格式文件">
+              📝 Markdown
             </button>
-            <button onclick="exportReport('pdf')" class="download-btn pdf-btn" disabled>
-              📕 PDF格式（开发中）
+            <button onclick="exportReport('pdf')" class="download-btn pdf-btn" title="下载PDF格式文件">
+              📕 PDF
             </button>
-            <button onclick="exportReport('word')" class="download-btn word-btn" disabled>
-              📘 Word格式（开发中）
+            <button onclick="exportReport('word')" class="download-btn word-btn" title="下载Word格式文件">
+              📘 Word
             </button>
           </div>
+          <p class="download-tip">💡 提示：点击上方按钮即可下载对应格式的报告文件</p>
         </div>
       </div>
     `
@@ -2005,6 +2006,17 @@ ${currentConditions.join('\n')}
       
       console.log(`正在导出${format}格式的报告...`)
       
+      // 获取按钮并添加加载状态
+      const buttons = document.querySelectorAll('.download-btn')
+      const currentButton = Array.from(buttons).find(btn => 
+        btn.textContent?.toLowerCase().includes(format.toLowerCase())
+      )
+      
+      if (currentButton) {
+        currentButton.classList.add('loading')
+        currentButton.textContent = '⏳ 生成中...'
+      }
+      
       const response = await fetch('/api/career-report/export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2015,7 +2027,7 @@ ${currentConditions.join('\n')}
       })
       
       if (!response.ok) {
-        throw new Error('导出失败')
+        throw new Error(`导出失败: ${response.status}`)
       }
       
       // 获取文件blob并下载
@@ -2023,16 +2035,78 @@ ${currentConditions.join('\n')}
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `职业规划报告_${Date.now()}.${format === 'pdf' ? 'pdf' : format === 'word' ? 'docx' : 'md'}`
+      
+      // 从响应头获取文件名，或使用默认名称
+      const contentDisposition = response.headers.get('Content-Disposition')
+      let filename = `职业规划报告_${Date.now()}.${format === 'pdf' ? 'pdf' : format === 'word' ? 'docx' : 'md'}`
+      
+      if (contentDisposition) {
+        const match = contentDisposition.match(/filename="?([^"]+)"?/)
+        if (match && match[1]) {
+          filename = decodeURIComponent(match[1])
+        }
+      }
+      
+      a.download = filename
       document.body.appendChild(a)
       a.click()
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
       
-      console.log(`${format}格式报告导出成功`)
+      console.log(`✅ ${format.toUpperCase()}格式报告导出成功: ${filename}`)
+      
+      // 恢复按钮状态并显示成功提示
+      if (currentButton) {
+        setTimeout(() => {
+          currentButton.classList.remove('loading')
+          
+          // 恢复原始文本
+          if (format === 'markdown') currentButton.textContent = '📝 Markdown'
+          else if (format === 'pdf') currentButton.textContent = '📕 PDF'
+          else if (format === 'word') currentButton.textContent = '📘 Word'
+          
+          // 短暂显示成功状态
+          const originalText = currentButton.textContent
+          currentButton.textContent = '✅ 已下载'
+          currentButton.style.background = 'rgba(76, 175, 80, 0.8)'
+          
+          setTimeout(() => {
+            currentButton.textContent = originalText
+            currentButton.style.background = ''
+          }, 2000)
+        }, 500)
+      }
+      
     } catch (error) {
-      console.error('导出报告失败:', error)
-      alert('导出失败，请稍后重试')
+      console.error(`❌ 导出${format}格式报告失败:`, error)
+      
+      // 恢复按钮状态
+      const buttons = document.querySelectorAll('.download-btn')
+      const currentButton = Array.from(buttons).find(btn => 
+        btn.textContent?.includes('生成中')
+      )
+      
+      if (currentButton) {
+        currentButton.classList.remove('loading')
+        
+        // 恢复原始文本
+        if (format === 'markdown') currentButton.textContent = '📝 Markdown'
+        else if (format === 'pdf') currentButton.textContent = '📕 PDF'
+        else if (format === 'word') currentButton.textContent = '📘 Word'
+        
+        // 显示错误状态
+        currentButton.style.background = 'rgba(244, 67, 54, 0.8)'
+        currentButton.textContent = '❌ 失败'
+        
+        setTimeout(() => {
+          currentButton.style.background = ''
+          if (format === 'markdown') currentButton.textContent = '📝 Markdown'
+          else if (format === 'pdf') currentButton.textContent = '📕 PDF'
+          else if (format === 'word') currentButton.textContent = '📘 Word'
+        }, 2000)
+      }
+      
+      alert(`导出失败，请稍后重试\n错误信息: ${(error as Error).message}`)
     }
   }
   
@@ -2104,10 +2178,11 @@ ${currentConditions.join('\n')}
         display: flex;
         gap: 10px;
         flex-wrap: wrap;
+        margin-bottom: 8px;
       }
       
       .download-btn {
-        padding: 10px 16px;
+        padding: 10px 20px;
         border: none;
         border-radius: 6px;
         cursor: pointer;
@@ -2116,28 +2191,65 @@ ${currentConditions.join('\n')}
         transition: all 0.3s ease;
         background: rgba(255, 255, 255, 0.2);
         color: white;
+        position: relative;
+        overflow: hidden;
+      }
+      
+      .download-btn::before {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 0;
+        height: 0;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.3);
+        transform: translate(-50%, -50%);
+        transition: width 0.6s, height 0.6s;
+      }
+      
+      .download-btn:hover::before {
+        width: 300px;
+        height: 300px;
       }
       
       .download-btn:hover:not(:disabled) {
-        background: rgba(255, 255, 255, 0.3);
-        transform: translateY(-2px);
+        transform: translateY(-2px) scale(1.05);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
       }
       
-      .download-btn:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
+      .download-btn:active:not(:disabled) {
+        transform: translateY(0) scale(0.98);
       }
       
       .markdown-btn:hover:not(:disabled) {
-        background: rgba(76, 175, 80, 0.6);
+        background: rgba(76, 175, 80, 0.7);
       }
       
       .pdf-btn:hover:not(:disabled) {
-        background: rgba(244, 67, 54, 0.6);
+        background: rgba(244, 67, 54, 0.7);
       }
       
       .word-btn:hover:not(:disabled) {
-        background: rgba(33, 150, 243, 0.6);
+        background: rgba(33, 150, 243, 0.7);
+      }
+      
+      .download-tip {
+        margin: 12px 0 0 0;
+        font-size: 11px;
+        opacity: 0.85;
+        font-style: italic;
+      }
+      
+      /* 加载动画 */
+      @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.7; }
+      }
+      
+      .download-btn.loading {
+        animation: pulse 1.5s infinite;
+        pointer-events: none;
       }
     `
     

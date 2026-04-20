@@ -12,10 +12,12 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "2.95.3",
+    "docx": "^9.6.1",
     "dotenv": "^17.2.3",
     "es-object-atoms": "^1.1.1",
     "express": "^4.21.2",
     "pdf-parse": "^2.4.5",
+    "pdfkit": "^0.18.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
