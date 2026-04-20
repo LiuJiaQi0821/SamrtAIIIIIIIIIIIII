@@ -1260,67 +1260,13 @@ function createApp() {
     }
   }
   
-  // 显示筛选进度（在左侧卡片区域）
+  // 显示筛选进度（仅在后台记录，不展示UI）
   function showFilterProgress(step: number, remaining: number, total: number, sampleJobs: any[]) {
-    const cardsPanel = document.getElementById('cards-panel')
-    if (!cardsPanel) return
-    
-    // 计算进度百分比
-    const percentage = Math.round((remaining / total) * 100)
-    
-    let sampleHtml = ''
+    // 只在控制台记录，不展示左侧卡片
+    console.log(`[筛选进度] 第${step}/5步，剩余岗位: ${remaining}/${total}，已筛选掉: ${total - remaining}`)
     if (sampleJobs && sampleJobs.length > 0) {
-      sampleHtml = `
-        <div class="mt-4">
-          <h4 class="text-sm font-medium text-gray-700 mb-2">示例岗位：</h4>
-          <div class="space-y-2">
-            ${sampleJobs.map((job: any) => `
-              <div class="bg-gray-50 rounded-lg p-3">
-                <div class="font-medium text-gray-800">${job.title || '未知岗位'}</div>
-                <div class="text-sm text-gray-500">${job.company || '未知公司'} · ${job.location || '未知地点'}</div>
-              </div>
-            `).join('')}
-          </div>
-        </div>
-      `
+      console.log('[筛选进度] 示例岗位:', sampleJobs.map((j: any) => j.title))
     }
-    
-    // 更新左侧卡片，显示筛选进度
-    cardsPanel.innerHTML = `
-      <div class="h-full flex flex-col">
-        <div class="hidden lg:flex items-center px-4 py-3">
-          <h2 class="text-xl font-semibold text-gray-700">岗位筛选进度</h2>
-        </div>
-        <div class="flex-1 overflow-auto p-4 lg:p-6">
-          <div class="max-w-md mx-auto">
-            <div class="bg-white rounded-xl p-6 shadow-lg">
-              <div class="text-center mb-6">
-                <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center">
-                  <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-                  </svg>
-                </div>
-                <h3 class="text-lg font-semibold text-gray-800">正在筛选岗位</h3>
-                <p class="text-gray-500 text-sm mt-1">第 ${step}/5 步</p>
-              </div>
-              
-              <div class="space-y-4">
-                <div class="flex justify-between items-center">
-                  <span class="text-sm font-medium text-gray-700">剩余岗位</span>
-                  <span class="text-sm font-bold text-blue-600">${remaining} / ${total}</span>
-                </div>
-                <div class="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
-                  <div class="h-full bg-gradient-to-r from-blue-400 to-blue-600 rounded-full transition-all duration-500" style="width: ${percentage}%"></div>
-                </div>
-                <p class="text-xs text-gray-500 text-center">已筛选掉 ${total - remaining} 个不符合条件的岗位</p>
-              </div>
-              
-              ${sampleHtml}
-            </div>
-          </div>
-        </div>
-      </div>
-    `
   }
   
   // 获取最终筛选结果
