@@ -1,11 +1,17 @@
 import { Router } from 'express';
 import { createClient } from '@supabase/supabase-js';
 import { execSync } from 'child_process';
+import { searchJobs, FormattedJob } from './jobs';
 
 const router = Router();
 
+// 环境变量只加载一次
+let envLoaded = false;
+
 // 加载环境变量
 function loadEnv(): void {
+  if (envLoaded) return;
+  
   try {
     const pythonCode = `
 import os
@@ -43,6 +49,7 @@ except Exception as e:
         }
       }
     }
+    envLoaded = true;
   } catch {
     // Silently fail
   }
@@ -80,17 +87,14 @@ function getSupabaseClient() {
 
 // 人岗匹配分析API
 router.post('/api/job-match', async (req, res) => {
+  const startTime = Date.now();
+  console.log('========== 人岗匹配分析开始 ==========');
+  
   try {
     const { expectations, profile } = req.body;
     
-    console.log('开始人岗匹配分析...');
     console.log('职业期望:', expectations);
     console.log('学生画像:', profile ? Object.keys(profile) : '无');
-    
-    const db = getSupabaseClient();
-    if (!db) {
-      return res.status(500).json({ success: false, error: '数据库未配置' });
-    }
     
     // 记录用户原始的筛选条件，用于后续提示
     const originalFilters: string[] = [];
@@ -153,12 +157,13 @@ router.post('/api/job-match', async (req, res) => {
       }
     ];
     
-    let matchedJobs: any[] = [];
+    let matchedJobs: FormattedJob[] = [];
     let finalDroppedConditions: string[] = [];
     
     // 逐个尝试搜索策略
-    for (const strategy of searchStrategies) {
-      console.log('尝试搜索策略, 已放宽条件:', strategy.droppedConditions);
+    for (let i = 0; i < searchStrategies.length; i++) {
+      const strategy = searchStrategies[i];
+      console.log(`[策略${i + 1}/${searchStrategies.length}] 尝试搜索, 已放宽条件:`, strategy.droppedConditions);
       
       // 清理空的筛选条件
       const searchFilters: Record<string, string> = {};
@@ -168,23 +173,19 @@ router.post('/api/job-match', async (req, res) => {
       
       console.log('当前搜索条件:', searchFilters);
       
-      // 调用岗位搜索API
-      const searchResponse = await fetch('http://localhost:5000/api/jobs/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(searchFilters)
-      });
-      
-      const searchData = await searchResponse.json();
-      const jobs = searchData.jobs || [];
+      // 直接调用 searchJobs 函数，只取前10条
+      const jobs = await searchJobs(searchFilters, 10);
       
       if (jobs.length > 0) {
         matchedJobs = jobs.slice(0, 5);
         finalDroppedConditions = strategy.droppedConditions;
-        console.log(`找到 ${matchedJobs.length} 个岗位，已放宽条件:`, finalDroppedConditions);
+        console.log(`✅ 找到 ${matchedJobs.length} 个岗位，已放宽条件:`, finalDroppedConditions);
         break;
       }
     }
+    
+    const searchTime = Date.now() - startTime;
+    console.log(`⏱️  岗位搜索耗时: ${searchTime}ms`);
     
     // 构建提示信息
     let friendlyMessage = '';
@@ -324,6 +325,9 @@ ${jobsSummary}
 - **不要输出任何友好提示语，只输出JSON代码块**
 `;
 
+      console.log('开始AI匹配度分析...');
+      const aiStartTime = Date.now();
+      
       try {
         const chatResponse = await fetch('http://localhost:5000/api/chat', {
           method: 'POST',
@@ -369,21 +373,29 @@ ${jobsSummary}
           if (jsonMatch) {
             try {
               matchAnalysis = JSON.parse(jsonMatch[1]);
-              console.log('匹配分析完成:', Object.keys(matchAnalysis));
+              console.log('✅ 匹配分析完成');
             } catch {
-              console.error('解析匹配分析JSON失败');
+              console.error('❌ 解析匹配分析JSON失败');
             }
           }
           
-          // 提取友好提示语 - 使用我们自定义的 friendlyMessage
-          const messageMatch = aiResponse.replace(/```json[\s\S]*?```/g, '').trim();
+          const aiTime = Date.now() - aiStartTime;
+          console.log(`⏱️  AI分析耗时: ${aiTime}ms`);
           
           // 保存分析结果到localStorage（通过前端完成，后端只返回数据）
+          const totalTime = Date.now() - startTime;
+          console.log(`========== 人岗匹配分析完成，总耗时: ${totalTime}ms ==========`);
+          
           res.json({
             success: true,
-            message: friendlyMessage,  // 使用我们自定义的友好提示语
+            message: friendlyMessage,
             analysis: matchAnalysis,
-            jobs: matchedJobs
+            jobs: matchedJobs,
+            performance: {
+              searchTime,
+              aiTime,
+              totalTime
+            }
           });
           return;
           
@@ -393,15 +405,24 @@ ${jobsSummary}
       }
     }
     
-    // 如果没有AI分析结果，返回基本信息（使用我们的friendlyMessage）
+    // 如果没有AI分析结果，返回基本信息
+    const totalTime = Date.now() - startTime;
+    console.log(`========== 人岗匹配分析完成(无AI)，总耗时: ${totalTime}ms ==========`);
+    
     res.json({
       success: true,
       message: friendlyMessage,
-      jobs: matchedJobs
+      jobs: matchedJobs,
+      performance: {
+        searchTime,
+        totalTime
+      }
     });
     
   } catch (error) {
-    console.error('人岗匹配分析失败:', error);
+    const totalTime = Date.now() - startTime;
+    console.error('❌ 人岗匹配分析失败:', error);
+    console.log(`========== 人岗匹配分析失败，总耗时: ${totalTime}ms ==========`);
     res.status(500).json({ success: false, error: '服务器错误' });
   }
 });

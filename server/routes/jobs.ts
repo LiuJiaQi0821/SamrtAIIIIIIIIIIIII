@@ -4,8 +4,13 @@ import { execSync } from 'child_process';
 
 const router = Router();
 
+// 环境变量只加载一次
+let envLoaded = false;
+
 // 加载环境变量
 function loadEnv(): void {
+  if (envLoaded) return;
+  
   try {
     const pythonCode = `
 import os
@@ -43,6 +48,7 @@ except Exception as e:
         }
       }
     }
+    envLoaded = true;
   } catch {
     // Silently fail
   }
@@ -99,100 +105,160 @@ interface CareerPathRecord {
   to_job_id: number;
 }
 
+// 格式化后的岗位类型
+export interface FormattedJob {
+  id: number;
+  title: string;
+  company: string;
+  salary: string;
+  location: string;
+  industry: string;
+  company_type: string;
+  company_size: string;
+  description: string;
+}
+
+// 简单的内存缓存
+interface CacheEntry<T> {
+  data: T;
+  timestamp: number;
+}
+
+const searchCache = new Map<string, CacheEntry<FormattedJob[]>>();
+const CACHE_TTL = 5 * 60 * 1000; // 5分钟缓存
+
+// 生成缓存键
+function getCacheKey(filters: Record<string, string>): string {
+  const sortedKeys = Object.keys(filters).sort();
+  return sortedKeys.map(key => `${key}:${filters[key]}`).join('|');
+}
+
+// 检查缓存
+function getFromCache(key: string): FormattedJob[] | null {
+  const entry = searchCache.get(key);
+  if (entry && Date.now() - entry.timestamp < CACHE_TTL) {
+    return entry.data;
+  }
+  if (entry) {
+    searchCache.delete(key);
+  }
+  return null;
+}
+
+// 设置缓存
+function setCache(key: string, data: FormattedJob[]): void {
+  searchCache.set(key, {
+    data,
+    timestamp: Date.now()
+  });
+  
+  // 清理过期缓存
+  const now = Date.now();
+  for (const [k, v] of searchCache.entries()) {
+    if (now - v.timestamp > CACHE_TTL) {
+      searchCache.delete(k);
+    }
+  }
+}
+
+// 核心搜索逻辑 - 可以被其他模块直接调用
+export async function searchJobs(filters: {
+  industry?: string;
+  salary?: string;
+  location?: string;
+  company?: string;
+  size?: string;
+  jobType?: string;
+  keyword?: string;
+}, limit: number = 20): Promise<FormattedJob[]> {
+  // 检查缓存
+  const cacheKey = getCacheKey(filters);
+  const cached = getFromCache(cacheKey);
+  if (cached) {
+    console.log('使用缓存的搜索结果');
+    return cached.slice(0, limit);
+  }
+
+  const { industry, salary, location, company, size, jobType, keyword } = filters;
+  
+  // 构建筛选条件
+  const filterParts: string[] = [];
+  
+  if (industry) {
+    filterParts.push(`industry=ilike.*${encodeURIComponent(industry)}*`);
+  }
+  if (salary) {
+    filterParts.push(`salary_range=eq.${encodeURIComponent(salary)}`);
+  }
+  if (location) {
+    filterParts.push(`address=ilike.${encodeURIComponent(location)}*`);
+  }
+  if (company) {
+    filterParts.push(`company_type=eq.${encodeURIComponent(company)}`);
+  }
+  if (size) {
+    filterParts.push(`company_size=eq.${encodeURIComponent(size)}`);
+  }
+  if (jobType) {
+    filterParts.push(`job_title=ilike.*${encodeURIComponent(jobType)}*`);
+  }
+  
+  // 关键词搜索：同时匹配岗位名称、公司名称、职位描述
+  if (keyword && keyword.trim()) {
+    const encodedKeyword = encodeURIComponent(keyword.trim());
+    const orFilter = `(job_title.ilike.*${encodedKeyword}*,company_name.ilike.*${encodedKeyword}*,job_description.ilike.*${encodedKeyword}*)`;
+    const encodedOrFilter = orFilter.replace(/\(/g, '%28').replace(/\)/g, '%29').replace(/,/g, '%2C');
+    filterParts.push(`or=${encodedOrFilter}`);
+  }
+  
+  // 构建URL - 只获取需要的字段，并且只取前limit条
+  let url = `${supabaseUrl}/rest/v1/jobs?select=id,job_title,company_name,salary_range,address,industry,company_type,company_size,job_description&order=id.desc&limit=${limit}`;
+  
+  if (filterParts.length > 0) {
+    url += '&' + filterParts.join('&');
+  }
+  
+  console.log('搜索URL:', url.replace(supabaseUrl, '[SUPABASE_URL]'));
+  
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'apikey': supabaseKey,
+      'Authorization': `Bearer ${supabaseKey}`,
+      'Content-Type': 'application/json'
+    }
+  });
+  
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  
+  const data = await response.json();
+  
+  // 格式化数据
+  const jobs: FormattedJob[] = (Array.isArray(data) ? data : []).map((job: JobRecord) => ({
+    id: job.id,
+    title: job.job_title,
+    company: job.company_name,
+    salary: job.salary_range,
+    location: job.address,
+    industry: job.industry,
+    company_type: job.company_type,
+    company_size: (job as any).company_size || '',
+    description: job.job_description
+  }));
+  
+  // 设置缓存
+  setCache(cacheKey, jobs);
+  
+  return jobs;
+}
+
 // 搜索岗位API
 router.post('/api/jobs/search', async (req, res) => {
   try {
-    const { industry, salary, location, company, size, jobType, keyword } = req.body;
-    
-    // 构建筛选条件
-    const filters: string[] = [];
-    
-    if (industry) {
-      filters.push(`industry=ilike.*${encodeURIComponent(industry)}*`);
-    }
-    if (salary) {
-      filters.push(`salary_range=eq.${encodeURIComponent(salary)}`);
-    }
-    if (location) {
-      filters.push(`address=ilike.${encodeURIComponent(location)}*`);
-    }
-    if (company) {
-      filters.push(`company_type=eq.${encodeURIComponent(company)}`);
-    }
-    if (size) {
-      filters.push(`company_size=eq.${encodeURIComponent(size)}`);
-    }
-    if (jobType) {
-      filters.push(`job_title=ilike.*${encodeURIComponent(jobType)}*`);
-    }
-    
-    // 关键词搜索：同时匹配岗位名称、公司名称、职位描述
-    if (keyword && keyword.trim()) {
-      // 对关键词进行 URL 编码
-      const encodedKeyword = encodeURIComponent(keyword.trim());
-      // 构建 or 条件
-      const orFilter = `(job_title.ilike.*${encodedKeyword}*,company_name.ilike.*${encodedKeyword}*,job_description.ilike.*${encodedKeyword}*)`;
-      // 对括号和逗号进行编码
-      const encodedOrFilter = orFilter.replace(/\(/g, '%28').replace(/\)/g, '%29').replace(/,/g, '%2C');
-      filters.push(`or=${encodedOrFilter}`);
-    }
-    
-    // 构建基础URL - 包含更多字段用于显示
-    let url = `${supabaseUrl}/rest/v1/jobs?select=id,job_title,company_name,salary_range,address,industry,company_type,company_size,job_description&order=id`;
-    
-    // 添加筛选条件
-    if (filters.length > 0) {
-      url += '&' + filters.join('&');
-    }
-    
-    // 使用分页获取所有符合条件的数据
-    const allJobs: JobRecord[] = [];
-    const pageSize = 1000;
-    let page = 0;
-    let hasMore = true;
-    
-    while (hasMore) {
-      const offset = page * pageSize;
-      const pageUrl = `${url}&limit=${pageSize}&offset=${offset}`;
-      
-      const response = await fetch(pageUrl, {
-        method: 'GET',
-        headers: {
-          'apikey': supabaseKey,
-          'Authorization': `Bearer ${supabaseKey}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      
-      if (Array.isArray(data) && data.length > 0) {
-        allJobs.push(...data);
-        page++;
-        if (data.length < pageSize) {
-          hasMore = false;
-        }
-      } else {
-        hasMore = false;
-      }
-    }
-    
-    // 格式化数据 - 使用正确的列名
-    const jobs = allJobs.map((job) => ({
-      id: job.id,
-      title: job.job_title,
-      company: job.company_name,
-      salary: job.salary_range,
-      location: job.address,
-      industry: job.industry,
-      company_type: job.company_type,
-      company_size: job.company_size,
-      description: job.job_description
-    }));
+    const filters = req.body;
+    const jobs = await searchJobs(filters, 100); // API接口返回更多结果
     
     res.json({
       success: true,
