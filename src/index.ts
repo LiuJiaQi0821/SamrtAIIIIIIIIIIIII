@@ -807,9 +807,6 @@ function createApp() {
     }
     
     // 人岗匹配度卡片（新格式 - 四个维度）
-    console.log('updateProfileCard 检查 profile.jobMatch:', !!profile.jobMatch)
-    console.log('updateProfileCard 检查 profile.jobMatch.matches:', !!(profile.jobMatch && profile.jobMatch.matches))
-    
     if (profile.jobMatch && profile.jobMatch.matches) {
       console.log('开始渲染岗位匹配卡片，原始数据:', profile.jobMatch.matches?.length)
       
@@ -1826,30 +1823,15 @@ ${currentConditions.join('\n')}
       }
       
       console.log('岗位匹配返回:', result.success ? '成功' : '失败')
-      console.log('result.analysis 存在吗?', !!result.analysis)
-      console.log('result.analysis 结构:', result.analysis ? JSON.stringify(result.analysis, null, 2).substring(0, 500) : '无')
-      console.log('result.analysis.matches 存在吗?', !!(result.analysis && result.analysis.matches))
       
       // 保存匹配分析结果到 localStorage
       if (result.analysis) {
         const existingProfile = JSON.parse(localStorage.getItem('studentProfile') || '{}')
-        console.log('existingProfile 之前的结构:', JSON.stringify(existingProfile, null, 2).substring(0, 300))
-        
         existingProfile.jobMatch = result.analysis
         localStorage.setItem('studentProfile', JSON.stringify(existingProfile))
-        console.log('✅ 已保存 jobMatch 到 localStorage!')
-        
-        // 验证是否真的保存成功
-        const verifyProfile = JSON.parse(localStorage.getItem('studentProfile') || '{}')
-        console.log('验证 localStorage 中的 jobMatch:', !!(verifyProfile.jobMatch))
-        console.log('验证 localStorage 中的 jobMatch.matches:', !!(verifyProfile.jobMatch && verifyProfile.jobMatch.matches))
         
         // 更新卡片UI
-        console.log('准备调用 updateProfileCard...')
         updateProfileCard(existingProfile)
-        console.log('✅ 已调用 updateProfileCard!')
-      } else {
-        console.log('❌ result.analysis 为空，无法保存!')
       }
       
       // 显示匹配分析结果
