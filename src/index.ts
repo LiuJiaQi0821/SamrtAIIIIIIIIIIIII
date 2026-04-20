@@ -1944,7 +1944,7 @@ ${currentConditions.join('\n')}
     }
   }
   
-  // 展示职业规划报告卡片
+  // 展示职业规划报告卡片（完整版 - 三大模块 + 图表）
   function showCareerReportCard(report: any) {
     // 查找或创建报告展示区域
     let reportContainer = document.getElementById('career-report-container')
@@ -1954,35 +1954,405 @@ ${currentConditions.join('\n')}
       reportContainer.id = 'career-report-container'
       reportContainer.className = 'career-report-card'
       
-      // 插入到合适的位置（在岗位匹配卡片后面）
-      const profileCard = document.querySelector('.profile-card') || document.querySelector('.card')
-      if (profileCard && profileCard.parentNode) {
-        profileCard.parentNode.insertBefore(reportContainer, profileCard.nextSibling)
+      // 插入到合适的位置
+      const cardsContent = document.getElementById('cards-content')
+      if (cardsContent) {
+        cardsContent.appendChild(reportContainer)
       }
     }
     
-    // 构建报告HTML
+    const { studentInfo, module1, module2, module3 } = report
+    
+    // 构建完整的报告HTML（三大模块）
     reportContainer.innerHTML = `
-      <div class="report-header">
-        <h3>📄 职业规划报告</h3>
-        <span class="report-time">${new Date().toLocaleString()}</span>
+      <!-- 报告头部 -->
+      <div class="report-header-main">
+        <div class="report-title-section">
+          <h2 class="report-main-title">📋 职业规划报告</h2>
+          <p class="report-subtitle">Comprehensive Career Development Report</p>
+        </div>
+        <div class="report-meta">
+          <span class="report-student">${studentInfo?.name || '用户'} · ${studentInfo?.education || ''} · ${studentInfo?.major || ''}</span>
+          <span class="report-time">${new Date(report.generatedAt).toLocaleString('zh-CN')}</span>
+        </div>
       </div>
-      <div class="report-content">
-        <p class="report-status">报告已生成</p>
-        <div class="download-section">
-          <h4>下载报告（支持多种格式）</h4>
-          <div class="download-buttons">
-            <button onclick="exportReport('markdown')" class="download-btn markdown-btn" title="下载Markdown格式文件">
-              📝 Markdown
-            </button>
-            <button onclick="exportReport('pdf')" class="download-btn pdf-btn" title="下载PDF格式文件">
-              📕 PDF
-            </button>
-            <button onclick="exportReport('word')" class="download-btn word-btn" title="下载Word格式文件">
-              📘 Word
-            </button>
+
+      <!-- 模块一：职业探索与岗位匹配 -->
+      <div class="report-module" id="module1">
+        <div class="module-header">
+          <span class="module-number">01</span>
+          <h3 class="module-title">${module1?.title || '职业探索与岗位匹配'}</h3>
+        </div>
+        <p class="module-summary">${module1?.summary || ''}</p>
+        
+        <!-- 匹配度总览卡片 -->
+        <div class="match-overview-card">
+          <div class="match-score-circle">
+            <svg viewBox="0 0 100 100" class="score-ring">
+              <circle cx="50" cy="50" r="45" fill="none" stroke="#e5e7eb" stroke-width="8"/>
+              <circle cx="50" cy="50" r="45" fill="none" stroke="url(#scoreGradient)" stroke-width="8"
+                stroke-dasharray="${(module1?.jobMatchAnalysis?.overallMatchScore || 0) * 2.83} 283"
+                stroke-linecap="round" transform="rotate(-90 50 50)"/>
+              <defs>
+                <linearGradient id="scoreGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stop-color="#667eea"/>
+                  <stop offset="100%" stop-color="#764ba2"/>
+                </linearGradient>
+              </defs>
+            </svg>
+            <div class="score-text">
+              <span class="score-value">${module1?.jobMatchAnalysis?.overallMatchScore || 0}</span>
+              <span class="score-label">分</span>
+            </div>
           </div>
-          <p class="download-tip">💡 提示：点击上方按钮即可下载对应格式的报告文件</p>
+          <div class="match-info">
+            <div class="match-grade ${getGradeClass(module1?.jobMatchAnalysis?.overallGrade)}">
+              ${module1?.jobMatchAnalysis?.overallGrade || 'B'}级
+            </div>
+            <div class="match-positioning">${module1?.jobMatchAnalysis?.marketPositioning || ''}</div>
+          </div>
+        </div>
+
+        <!-- 雷达图 -->
+        <div class="radar-chart-card">
+          <h4 class="chart-title">🎯 人岗匹配度雷达图</h4>
+          <div class="radar-chart-wrapper">
+            <canvas id="report-radar-chart" width="300" height="300"></canvas>
+          </div>
+          <div class="radar-legend">
+            <span class="legend-item"><span class="legend-dot student"></span>学生现状</span>
+            <span class="legend-item"><span class="legend-dot job"></span>岗位要求</span>
+          </div>
+        </div>
+
+        <!-- 能力差距分析表格 -->
+        <div class="gap-analysis-table">
+          <h4 class="table-title">📊 能力维度分析</h4>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>能力维度</th>
+                  <th>当前水平</th>
+                  <th>岗位要求</th>
+                  <th>差距</th>
+                  <th>优先级</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${(module1?.capabilityGap || []).map((gap: any) => `
+                  <tr>
+                    <td>${gap.dimension}</td>
+                    <td>
+                      <div class="cell-with-bar">
+                        <span class="bar-value">${gap.current}%</span>
+                        <div class="mini-bar"><div class="mini-fill" style="width:${gap.current}%"></div></div>
+                      </div>
+                    </td>
+                    <td>
+                      <div class="cell-with-bar">
+                        <span class="bar-value">${gap.required}%</span>
+                        <div class="mini-bar"><div class="mini-fill required" style="width:${gap.required}%"></div></div>
+                      </div>
+                    </td>
+                    <td><span class="gap-badge ${gap.gap < -15 ? 'high' : gap.gap < -5 ? 'medium' : 'low'}">${gap.gap > 0 ? '+' : ''}${gap.gap}%</span></td>
+                    <td><span class="priority-badge ${gap.priority === '高' ? 'high' : gap.priority === '中' ? 'medium' : 'low'}">${gap.priority}</span></td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 优势与建议 -->
+        <div class="strengths-weaknesses-grid">
+          <div class="sw-card strengths-card">
+            <h4 class="sw-title">✅ 核心优势</h4>
+            <ul class="sw-list">
+              ${(module1?.jobMatchAnalysis?.strengths || []).map((s: string) => `<li>${s}</li>`).join('')}
+            </ul>
+          </div>
+          <div class="sw-card weaknesses-card">
+            <h4 class="sw-title">⚠️ 待提升项</h4>
+            <ul class="sw-list">
+              ${(module1?.jobMatchAnalysis?.weaknesses || []).map((w: string) => `<li>${w}</li>`).join('')}
+            </ul>
+          </div>
+        </div>
+
+        <!-- 推荐岗位 -->
+        ${(module1?.recommendedJobs && module1.recommendedJobs.length > 0) ? `
+        <div class="recommended-jobs">
+          <h4 class="section-subtitle">🏆 推荐岗位 Top 3</h4>
+          <div class="jobs-grid">
+            ${module1.recommendedJobs.map((job: any) => `
+              <div class="job-recommendation-card">
+                <div class="job-rank">${job.rank}</div>
+                <div class="job-info">
+                  <h5 class="job-name">${job.title}</h5>
+                  <p class="job-company">${job.company} · ${job.location}</p>
+                  <div class="job-meta">
+                    <span class="job-salary">${job.salary}</span>
+                    <span class="job-match-score">${job.matchScore}分</span>
+                  </div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+        ` : ''}
+      </div>
+
+      <!-- 模块二：职业目标设定与路径规划 -->
+      <div class="report-module" id="module2">
+        <div class="module-header">
+          <span class="module-number">02</span>
+          <h3 class="module-title">${module2?.title || '职业目标设定与路径规划'}</h3>
+        </div>
+        <p class="module-summary">${module2?.summary || ''}</p>
+
+        <!-- 职业目标时间线 -->
+        <div class="career-goals-timeline">
+          <h4 class="section-subtitle">🎯 职业发展目标</h4>
+          <div class="goals-container">
+            <div class="goal-item short-term">
+              <div class="goal-icon">🌱</div>
+              <div class="goal-content">
+                <h5>短期目标 (0-2年)</h5>
+                <p>${module2?.careerGoal?.shortTerm || ''}</p>
+              </div>
+            </div>
+            <div class="goal-arrow">→</div>
+            <div class="goal-item mid-term">
+              <div class="goal-icon">🌿</div>
+              <div class="goal-content">
+                <h5>中期目标 (2-5年)</h5>
+                <p>${module2?.careerGoal?.midTerm || ''}</p>
+              </div>
+            </div>
+            <div class="goal-arrow">→</div>
+            <div class="goal-item long-term">
+              <div class="goal-icon">🌳</div>
+              <div class="goal-content">
+                <h5>长期目标 (5-10年)</h5>
+                <p>${module2?.careerGoal?.longTerm || ''}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 行业趋势分析 -->
+        <div class="industry-trend-card">
+          <h4 class="section-subtitle">📈 行业趋势分析</h4>
+          <div class="trend-header">
+            <span class="trend-industry">${module2?.industryTrend?.industry || ''}</span>
+            <span class="trend-status ${module2?.industryTrend?.trend === '上升' ? 'up' : 'down'}">
+              ${module2?.industryTrend?.trend === '上升' ? '📈 上升期' : '📉 调整期'}
+            </span>
+          </div>
+          <p class="trend-description">${module2?.industryTrend?.description || ''}</p>
+          <div class="trend-points">
+            ${(module2?.industryTrend?.keyPoints || []).map((point: string) => `
+              <div class="trend-point-item">✦ ${point}</div>
+            `).join('')}
+          </div>
+        </div>
+
+        <!-- 职业发展路径图 -->
+        <div class="career-path-card">
+          <h4 class="section-subtitle">🛤️ 职业晋升路径</h4>
+          <div class="path-timeline">
+            ${(module2?.careerPath || []).map((path: any, idx: number) => `
+              <div class="path-node ${idx === 0 ? 'current' : ''}">
+                <div class="path-level">${path.level}</div>
+                <div class="path-content">
+                  <h5 class="path-title">${path.title}</h5>
+                  <div class="path-meta">
+                    <span class="path-years">${path.years}</span>
+                    <span class="path-salary">${path.salary}</span>
+                  </div>
+                  <div class="path-requirements">
+                    ${path.requirements.map((req: string) => `<span class="req-tag">${req}</span>`).join('')}
+                  </div>
+                  <p class="path-focus">💡 ${path.focus}</p>
+                </div>
+                ${idx < (module2?.careerPath?.length || 0) - 1 ? '<div class="path-connector"></div>' : ''}
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <!-- 发展时间线 -->
+        <div class="development-timeline">
+          <h4 class="section-subtitle">⏱️ 发展阶段详解</h4>
+          <div class="timeline-vertical">
+            ${(module2?.timeline || []).map((t: any, idx: number) => `
+              <div class="timeline-item">
+                <div class="timeline-marker">${idx + 1}</div>
+                <div class="timeline-content">
+                  <h5>${t.phase}: ${t.position}</h5>
+                  <p class="timeline-focus">${t.focus}</p>
+                  <div class="timeline-skills">
+                    ${t.skills.map((skill: string) => `<span class="skill-tag">${skill}</span>`).join('')}
+                  </div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      </div>
+
+      <!-- 模块三：行动计划与成果展示 -->
+      <div class="report-module" id="module3">
+        <div class="module-header">
+          <span class="module-number">03</span>
+          <h3 class="module-title">${module3?.title || '行动计划与成果展示'}</h3>
+        </div>
+        <p class="module-summary">${module3?.summary || ''}</p>
+
+        <!-- 短期计划 -->
+        <div class="action-plan-card short-plan">
+          <div class="plan-header">
+            <span class="plan-period">第1-6个月</span>
+            <h4 class="plan-goal">🎯 目标：${module3?.shortTermPlan?.goal || ''}</h4>
+          </div>
+          <div class="plan-tasks">
+            ${(module3?.shortTermPlan?.tasks || []).map((task: any, idx: number) => `
+              <div class="task-item">
+                <div class="task-checkbox">☐</div>
+                <div class="task-details">
+                  <h5 class="task-name">${task.task}</h5>
+                  <p class="task-desc">${task.details}</p>
+                  <span class="task-deadline">⏰ ${task.deadline}</span>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+          <div class="plan-milestones">
+            <h5>📍 关键里程碑</h5>
+            <div class="milestones-list">
+              ${(module3?.shortTermPlan?.milestones || []).map((m: any) => `
+                <div class="milestone-item">
+                  <span class="milestone-month">第${m.month}个月</span>
+                  <span class="milestone-desc">${m.milestone}</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+          <div class="plan-resources">
+            <h5>📚 学习资源</h5>
+            <div class="resources-tags">
+              ${(module3?.shortTermPlan?.resources || []).map((r: string) => `<span class="resource-tag">${r}</span>`).join('')}
+            </div>
+          </div>
+        </div>
+
+        <!-- 中期计划 -->
+        <div class="action-plan-card mid-plan">
+          <div class="plan-header">
+            <span class="plan-period">第7-18个月</span>
+            <h4 class="plan-goal">🎯 目标：${module3?.midTermPlan?.goal || ''}</h4>
+          </div>
+          <div class="plan-tasks">
+            ${(module3?.midTermPlan?.tasks || []).map((task: any, idx: number) => `
+              <div class="task-item">
+                <div class="task-checkbox">☐</div>
+                <div class="task-details">
+                  <h5 class="task-name">${task.task}</h5>
+                  <p class="task-desc">${task.details}</p>
+                  <span class="task-deadline">⏰ ${task.deadline}</span>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+          <div class="plan-milestones">
+            <h5>📍 关键里程碑</h5>
+            <div class="milestones-list">
+              ${(module3?.midTermPlan?.milestones || []).map((m: any) => `
+                <div class="milestone-item">
+                  <span class="milestone-month">第${m.month}个月</span>
+                  <span class="milestone-desc">${m.milestone}</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+          <div class="plan-resources">
+            <h5>📚 学习资源</h5>
+            <div class="resources-tags">
+              ${(module3?.midTermPlan?.resources || []).map((r: string) => `<span class="resource-tag">${r}</span>`).join('')}
+            </div>
+          </div>
+        </div>
+
+        <!-- 评估指标 -->
+        <div class="evaluation-metrics-card">
+          <h4 class="section-subtitle">📊 评估周期与指标</h4>
+          <div class="eval-cycle">
+            <span class="cycle-icon">🔄</span>
+            <span class="cycle-text">${module3?.evaluationMetrics?.cycle || ''}</span>
+          </div>
+          <div class="metrics-grid">
+            ${(module3?.evaluationMetrics?.metrics || []).map((m: any) => `
+              <div class="metric-card">
+                <h5 class="metric-name">${m.name}</h5>
+                <div class="metric-target">${m.target}</div>
+                <p class="metric-measure">衡量方式: ${m.measure}</p>
+                <div class="metric-progress">
+                  <div class="progress-bar">
+                    <div class="progress-fill" style="width: ${Math.random() * 30 + 10}%"></div>
+                  </div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <!-- 成果展示模板 -->
+        <div class="achievement-template-card">
+          <h4 class="section-subtitle">🏆 成果展示建议</h4>
+          <div class="template-grid">
+            <div class="template-category">
+              <h5>📁 作品集应包含</h5>
+              <ul>
+                ${(module3?.achievementTemplate?.portfolio || []).map((item: string) => `<li>${item}</li>`).join('')}
+              </ul>
+            </div>
+            <div class="template-category">
+              <h5>📄 简历优化重点</h5>
+              <ul>
+                ${(module3?.achievementTemplate?.resume || []).map((item: string) => `<li>${item}</li>`).join('')}
+              </ul>
+            </div>
+            <div class="template-category">
+              <h5>🎖️ 证书获取建议</h5>
+              <ul>
+                ${(module3?.achievementTemplate?.certificates || []).map((item: string) => `<li>${item}</li>`).join('')}
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 下载区域 -->
+      <div class="download-section-enhanced">
+        <h4 class="download-title">📥 导出职业规划报告</h4>
+        <p class="download-desc">支持多种格式导出，方便您在不同场景下使用</p>
+        <div class="download-buttons-enhanced">
+          <button onclick="exportReport('markdown')" class="dl-btn dl-markdown" title="下载Markdown格式">
+            <span class="dl-icon">📝</span>
+            <span class="dl-text">Markdown</span>
+            <span class="dl-format">.md</span>
+          </button>
+          <button onclick="exportReport('pdf')" class="dl-btn dl-pdf" title="下载PDF格式">
+            <span class="dl-icon">📕</span>
+            <span class="dl-text">PDF</span>
+            <span class="dl-format">.pdf</span>
+          </button>
+          <button onclick="exportReport('word')" class="dl-btn dl-word" title="下载Word格式">
+            <span class="dl-icon">📘</span>
+            <span class="dl-text">Word</span>
+            <span class="dl-format">.docx</span>
+          </button>
         </div>
       </div>
     `
@@ -1990,8 +2360,160 @@ ${currentConditions.join('\n')}
     // 绑定导出函数到全局
     ;(window as any).exportReport = exportReport
     
-    // 添加样式
+    // 添加完整样式
     addReportStyles()
+    
+    // 绘制雷达图
+    setTimeout(() => {
+      drawReportRadarChart(module1?.radarChart)
+    }, 100)
+  }
+
+  // 辅助函数：获取等级样式类名
+  function getGradeClass(grade: string): string {
+    switch(grade) {
+      case 'A': return 'grade-a'
+      case 'B': return 'grade-b'
+      case 'C': return 'grade-c'
+      default: return 'grade-d'
+    }
+  }
+
+  // 绘制报告中的雷达图
+  function drawReportRadarChart(radarData: any) {
+    const canvas = document.getElementById('report-radar-chart') as HTMLCanvasElement
+    if (!canvas || !radarData) return
+
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    const centerX = canvas.width / 2
+    const centerY = canvas.height / 2
+    const radius = Math.min(centerX, centerY) - 40
+    const dimensions = radarData.dimensions || []
+    const studentScores = radarData.studentScores || []
+    const jobScores = radarData.jobRequirements || []
+    const numDimensions = dimensions.length
+    const angleStep = (Math.PI * 2) / numDimensions
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+    // 绘制背景网格（5层）
+    for (let i = 5; i > 0; i--) {
+      const r = (radius / 5) * i
+      ctx.beginPath()
+      for (let j = 0; j <= numDimensions; j++) {
+        const angle = angleStep * j - Math.PI / 2
+        const x = centerX + r * Math.cos(angle)
+        const y = centerY + r * Math.sin(angle)
+        if (j === 0) ctx.moveTo(x, y)
+        else ctx.lineTo(x, y)
+      }
+      ctx.closePath()
+      ctx.strokeStyle = '#e5e7eb'
+      ctx.lineWidth = 1
+      ctx.stroke()
+      
+      // 绘制刻度值
+      if (i <= 5) {
+        ctx.fillStyle = '#9ca3af'
+        ctx.font = '10px sans-serif'
+        ctx.fillText(`${i * 20}`, centerX + 5, centerY - r + 3)
+      }
+    }
+
+    // 绘制轴线
+    for (let i = 0; i < numDimensions; i++) {
+      const angle = angleStep * i - Math.PI / 2
+      ctx.beginPath()
+      ctx.moveTo(centerX, centerY)
+      ctx.lineTo(
+        centerX + radius * Math.cos(angle),
+        centerY + radius * Math.sin(angle)
+      )
+      ctx.strokeStyle = '#d1d5db'
+      ctx.lineWidth = 1
+      ctx.stroke()
+    }
+
+    // 绘制岗位要求多边形（填充）
+    ctx.beginPath()
+    for (let i = 0; i <= numDimensions; i++) {
+      const idx = i % numDimensions
+      const angle = angleStep * idx - Math.PI / 2
+      const value = jobScores[idx] || 0
+      const r = (value / 100) * radius
+      const x = centerX + r * Math.cos(angle)
+      const y = centerY + r * Math.sin(angle)
+      if (i === 0) ctx.moveTo(x, y)
+      else ctx.lineTo(x, y)
+    }
+    ctx.closePath()
+    ctx.fillStyle = 'rgba(102, 126, 234, 0.15)'
+    ctx.fill()
+    ctx.strokeStyle = '#667eea'
+    ctx.lineWidth = 2
+    ctx.stroke()
+
+    // 绘制学生现状多边形（填充）
+    ctx.beginPath()
+    for (let i = 0; i <= numDimensions; i++) {
+      const idx = i % numDimensions
+      const angle = angleStep * idx - Math.PI / 2
+      const value = studentScores[idx] || 0
+      const r = (value / 100) * radius
+      const x = centerX + r * Math.cos(angle)
+      const y = centerY + r * Math.sin(angle)
+      if (i === 0) ctx.moveTo(x, y)
+      else ctx.lineTo(x, y)
+    }
+    ctx.closePath()
+    ctx.fillStyle = 'rgba(234, 88, 12, 0.25)'
+    ctx.fill()
+    ctx.strokeStyle = '#ea580c'
+    ctx.lineWidth = 2
+    ctx.stroke()
+
+    // 绘制数据点
+    for (let i = 0; i < numDimensions; i++) {
+      const angle = angleStep * i - Math.PI / 2
+      
+      // 学生数据点
+      const studentValue = studentScores[i] || 0
+      const studentR = (studentValue / 100) * radius
+      const sx = centerX + studentR * Math.cos(angle)
+      const sy = centerY + studentR * Math.sin(angle)
+      ctx.beginPath()
+      ctx.arc(sx, sy, 5, 0, Math.PI * 2)
+      ctx.fillStyle = '#ea580c'
+      ctx.fill()
+      ctx.strokeStyle = '#fff'
+      ctx.lineWidth = 2
+      ctx.stroke()
+
+      // 岗位要求数据点
+      const jobValue = jobScores[i] || 0
+      const jobR = (jobValue / 100) * radius
+      const jx = centerX + jobR * Math.cos(angle)
+      const jy = centerY + jobR * Math.sin(angle)
+      ctx.beginPath()
+      ctx.arc(jx, jy, 5, 0, Math.PI * 2)
+      ctx.fillStyle = '#667eea'
+      ctx.fill()
+      ctx.strokeStyle = '#fff'
+      ctx.lineWidth = 2
+      ctx.stroke()
+
+      // 维度标签
+      const labelRadius = radius + 20
+      const lx = centerX + labelRadius * Math.cos(angle)
+      const ly = centerY + labelRadius * Math.sin(angle)
+      ctx.fillStyle = '#374151'
+      ctx.font = '11px sans-serif'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText(dimensions[i], lx, ly)
+    }
   }
   
   // 导出报告
@@ -2110,146 +2632,1092 @@ ${currentConditions.join('\n')}
     }
   }
   
-  // 添加报告卡片样式
+  // 添加完整报告卡片样式（三大模块 + 图表）
   function addReportStyles() {
-    // 避免重复添加
     if (document.getElementById('career-report-styles')) return
     
     const style = document.createElement('style')
     style.id = 'career-report-styles'
     style.textContent = `
+      /* ========== 报告卡片主容器 ========== */
       .career-report-card {
+        background: #ffffff;
+        border-radius: 16px;
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+        overflow: hidden;
+        animation: reportSlideIn 0.6s ease-out;
+        margin-top: 20px;
+      }
+
+      @keyframes reportSlideIn {
+        from { opacity: 0; transform: translateY(30px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+
+      /* ========== 报告头部 ========== */
+      .report-header-main {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        border-radius: 12px;
-        padding: 20px;
-        margin-top: 16px;
+        padding: 24px 28px;
         color: white;
-        box-shadow: 0 8px 24px rgba(102, 126, 234, 0.3);
-        animation: slideInUp 0.5s ease-out;
-      }
-      
-      @keyframes slideInUp {
-        from {
-          opacity: 0;
-          transform: translateY(20px);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
-      }
-      
-      .report-header {
         display: flex;
         justify-content: space-between;
-        align-items: center;
-        margin-bottom: 16px;
+        align-items: flex-start;
+        flex-wrap: wrap;
+        gap: 12px;
       }
-      
-      .report-header h3 {
+
+      .report-main-title {
+        margin: 0;
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+      }
+
+      .report-subtitle {
+        margin: 4px 0 0 0;
+        font-size: 13px;
+        opacity: 0.85;
+        font-weight: 400;
+      }
+
+      .report-meta {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 4px;
+      }
+
+      .report-student {
+        font-size: 14px;
+        font-weight: 500;
+        background: rgba(255,255,255,0.2);
+        padding: 4px 12px;
+        border-radius: 20px;
+      }
+
+      .report-time {
+        font-size: 11px;
+        opacity: 0.8;
+      }
+
+      /* ========== 模块通用样式 ========== */
+      .report-module {
+        padding: 24px 28px;
+        border-bottom: 1px solid #f0f0f0;
+      }
+
+      .report-module:last-of-type {
+        border-bottom: none;
+      }
+
+      .module-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+
+      .module-number {
+        width: 36px;
+        height: 36px;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: white;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 15px;
+      }
+
+      .module-title {
         margin: 0;
         font-size: 18px;
+        font-weight: 700;
+        color: #1f2937;
+      }
+
+      .module-summary {
+        color: #6b7280;
+        font-size: 14px;
+        line-height: 1.7;
+        margin: 0 0 20px 0;
+        padding-left: 48px;
+      }
+
+      .section-subtitle {
+        font-size: 15px;
         font-weight: 600;
-      }
-      
-      .report-time {
-        font-size: 12px;
-        opacity: 0.9;
-      }
-      
-      .report-content {
-        background: rgba(255, 255, 255, 0.1);
-        border-radius: 8px;
-        padding: 16px;
-      }
-      
-      .report-status {
-        margin: 0 0 16px 0;
-        font-size: 14px;
-      }
-      
-      .download-section h4 {
-        margin: 0 0 12px 0;
-        font-size: 14px;
-        font-weight: 500;
-      }
-      
-      .download-buttons {
+        color: #374151;
+        margin: 20px 0 12px 0;
         display: flex;
-        gap: 10px;
-        flex-wrap: wrap;
-        margin-bottom: 8px;
+        align-items: center;
+        gap: 8px;
       }
-      
-      .download-btn {
-        padding: 10px 20px;
-        border: none;
-        border-radius: 6px;
-        cursor: pointer;
-        font-size: 13px;
-        font-weight: 500;
-        transition: all 0.3s ease;
-        background: rgba(255, 255, 255, 0.2);
-        color: white;
+
+      /* ========== 匹配度总览卡片 ========== */
+      .match-overview-card {
+        display: flex;
+        align-items: center;
+        gap: 28px;
+        background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+        border-radius: 12px;
+        padding: 24px;
+        margin-bottom: 20px;
+        border: 1px solid #e2e8f0;
+      }
+
+      .match-score-circle {
         position: relative;
-        overflow: hidden;
+        width: 120px;
+        height: 120px;
+        flex-shrink: 0;
       }
-      
-      .download-btn::before {
-        content: '';
+
+      .score-ring {
+        width: 100%;
+        height: 100%;
+      }
+
+      .score-text {
         position: absolute;
         top: 50%;
         left: 50%;
-        width: 0;
-        height: 0;
-        border-radius: 50%;
-        background: rgba(255, 255, 255, 0.3);
         transform: translate(-50%, -50%);
-        transition: width 0.6s, height 0.6s;
+        text-align: center;
       }
-      
-      .download-btn:hover::before {
-        width: 300px;
-        height: 300px;
+
+      .score-value {
+        display: block;
+        font-size: 32px;
+        font-weight: 800;
+        color: #667eea;
+        line-height: 1;
       }
-      
-      .download-btn:hover:not(:disabled) {
-        transform: translateY(-2px) scale(1.05);
-        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+
+      .score-label {
+        font-size: 12px;
+        color: #9ca3af;
       }
-      
-      .download-btn:active:not(:disabled) {
-        transform: translateY(0) scale(0.98);
+
+      .match-info {
+        flex: 1;
       }
-      
-      .markdown-btn:hover:not(:disabled) {
-        background: rgba(76, 175, 80, 0.7);
+
+      .match-grade {
+        display: inline-block;
+        padding: 8px 20px;
+        border-radius: 8px;
+        font-size: 22px;
+        font-weight: 800;
+        margin-bottom: 8px;
       }
-      
-      .pdf-btn:hover:not(:disabled) {
-        background: rgba(244, 67, 54, 0.7);
+
+      .match-grade.grade-a { background: linear-gradient(135deg, #d1fae5, #a7f3d0); color: #065f46; }
+      .match-grade.grade-b { background: linear-gradient(135deg, #fef3c7, #fde68a); color: #92400e; }
+      .match-grade.grade-c { background: linear-gradient(135deg, #fee2e2, #fecaca); color: #991b1b; }
+      .match-grade.grade-d { background: linear-gradient(135deg, #f3f4f6, #e5e7eb); color: #4b5563; }
+
+      .match-positioning {
+        font-size: 14px;
+        color: #6b7280;
       }
-      
-      .word-btn:hover:not(:disabled) {
-        background: rgba(33, 150, 243, 0.7);
+
+      /* ========== 雷达图 ========== */
+      .radar-chart-card {
+        background: #fafbfc;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 20px;
+        border: 1px solid #e5e7eb;
       }
-      
-      .download-tip {
-        margin: 12px 0 0 0;
+
+      .chart-title {
+        font-size: 15px;
+        font-weight: 600;
+        color: #374151;
+        margin: 0 0 16px 0;
+      }
+
+      .radar-chart-wrapper {
+        display: flex;
+        justify-content: center;
+        padding: 10px 0;
+      }
+
+      #report-radar-chart {
+        max-width: 100%;
+        height: auto;
+      }
+
+      .radar-legend {
+        display: flex;
+        justify-content: center;
+        gap: 24px;
+        margin-top: 12px;
+      }
+
+      .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        color: #6b7280;
+      }
+
+      .legend-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+      }
+
+      .legend-dot.student { background: #ea580c; }
+      .legend-dot.job { background: #667eea; }
+
+      /* ========== 能力差距表格 ========== */
+      .gap-analysis-table {
+        margin-bottom: 20px;
+      }
+
+      .table-responsive {
+        overflow-x: auto;
+        border-radius: 10px;
+        border: 1px solid #e5e7eb;
+      }
+
+      .data-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+
+      .data-table th {
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: white;
+        padding: 12px 14px;
+        text-align: left;
+        font-weight: 600;
+        white-space: nowrap;
+      }
+
+      .data-table td {
+        padding: 12px 14px;
+        border-bottom: 1px solid #f3f4f6;
+        vertical-align: middle;
+      }
+
+      .data-table tr:hover td {
+        background: #f9fafb;
+      }
+
+      .cell-with-bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .bar-value {
+        font-weight: 600;
+        min-width: 40px;
+        color: #374151;
+      }
+
+      .mini-bar {
+        width: 80px;
+        height: 8px;
+        background: #e5e7eb;
+        border-radius: 4px;
+        overflow: hidden;
+      }
+
+      .mini-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #34d399, #10b981);
+        border-radius: 4px;
+        transition: width 0.5s ease;
+      }
+
+      .mini-fill.required {
+        background: linear-gradient(90deg, #667eea, #764ba2);
+      }
+
+      .gap-badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-weight: 600;
+        font-size: 12px;
+      }
+
+      .gap-badge.high { background: #fee2e2; color: #dc2626; }
+      .gap-badge.medium { background: #fef3c7; color: #d97706; }
+      .gap-badge.low { background: #d1fae5; color: #059669; }
+
+      .priority-badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-weight: 600;
+        font-size: 12px;
+      }
+
+      .priority-badge.high { background: #fee2e2; color: #dc2626; }
+      .priority-badge.medium { background: #fef3c7; color: #d97706; }
+      .priority-badge.low { background: #d1fae5; color: #059669; }
+
+      /* ========== 优势与建议 ========== */
+      .strengths-weaknesses-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        margin-bottom: 20px;
+      }
+
+      @media (max-width: 640px) {
+        .strengths-weaknesses-grid { grid-template-columns: 1fr; }
+      }
+
+      .sw-card {
+        border-radius: 12px;
+        padding: 18px;
+      }
+
+      .strengths-card {
+        background: linear-gradient(135deg, #ecfdf5, #d1fae5);
+        border: 1px solid #a7f3d0;
+      }
+
+      .weaknesses-card {
+        background: linear-gradient(135deg, #fffbeb, #fef3c7);
+        border: 1px solid #fde68a;
+      }
+
+      .sw-title {
+        margin: 0 0 12px 0;
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      .sw-list {
+        margin: 0;
+        padding-left: 18px;
+        list-style: none;
+      }
+
+      .sw-list li {
+        position: relative;
+        padding: 6px 0 6px 20px;
+        font-size: 13px;
+        color: #4b5563;
+        line-height: 1.5;
+      }
+
+      .sw-list li::before {
+        content: '•';
+        position: absolute;
+        left: 0;
+        font-weight: bold;
+      }
+
+      .strengths-card .sw-list li::before { color: #059669; }
+      .weaknesses-card .sw-list li::before { color: #d97706; }
+
+      /* ========== 推荐岗位 ========== */
+      .recommended-jobs {
+        margin-bottom: 20px;
+      }
+
+      .jobs-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 14px;
+      }
+
+      .job-recommendation-card {
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 16px;
+        display: flex;
+        gap: 14px;
+        transition: all 0.25s ease;
+        cursor: pointer;
+      }
+
+      .job-recommendation-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 20px rgba(102, 126, 234, 0.15);
+        border-color: #667eea;
+      }
+
+      .job-rank {
+        width: 32px;
+        height: 32px;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: white;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 14px;
+        flex-shrink: 0;
+      }
+
+      .job-name {
+        margin: 0 0 4px 0;
+        font-size: 14px;
+        font-weight: 700;
+        color: #1f2937;
+      }
+
+      .job-company {
+        margin: 0 0 8px 0;
+        font-size: 12px;
+        color: #9ca3af;
+      }
+
+      .job-meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .job-salary {
+        font-size: 13px;
+        font-weight: 600;
+        color: #059669;
+      }
+
+      .job-match-score {
+        font-size: 13px;
+        font-weight: 700;
+        color: #667eea;
+      }
+
+      /* ========== 职业目标时间线 ========== */
+      .career-goals-timeline {
+        margin-bottom: 20px;
+      }
+
+      .goals-container {
+        display: flex;
+        align-items: stretch;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+
+      .goal-item {
+        flex: 1;
+        min-width: 180px;
+        background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+        border-radius: 12px;
+        padding: 18px;
+        border: 1px solid #e2e8f0;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .goal-item.short-term { border-top: 3px solid #10b981; }
+      .goal-item.mid-term { border-top: 3px solid #f59e0b; }
+      .goal-item.long-term { border-top: 3px solid #8b5cf6; }
+
+      .goal-icon {
+        font-size: 28px;
+      }
+
+      .goal-content h5 {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 700;
+        color: #1f2937;
+      }
+
+      .goal-content p {
+        margin: 0;
+        font-size: 13px;
+        color: #6b7280;
+        line-height: 1.5;
+      }
+
+      .goal-arrow {
+        display: flex;
+        align-items: center;
+        font-size: 20px;
+        color: #cbd5e1;
+        font-weight: bold;
+      }
+
+      /* ========== 行业趋势 ========== */
+      .industry-trend-card {
+        background: linear-gradient(135deg, #eff6ff, #dbeafe);
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 20px;
+        border: 1px solid #bfdbfe;
+      }
+
+      .trend-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+
+      .trend-industry {
+        font-size: 16px;
+        font-weight: 700;
+        color: #1e40af;
+      }
+
+      .trend-status {
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .trend-status.up { background: #d1fae5; color: #065f46; }
+      .trend-status.down { background: #fee2e2; color: #991b1b; }
+
+      .trend-description {
+        font-size: 13px;
+        color: #4b5563;
+        line-height: 1.7;
+        margin: 0 0 12px 0;
+      }
+
+      .trend-points {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 8px;
+      }
+
+      .trend-point-item {
+        font-size: 13px;
+        color: #1e40af;
+        padding: 8px 12px;
+        background: rgba(255,255,255,0.6);
+        border-radius: 8px;
+      }
+
+      /* ========== 职业路径 ========== */
+      .career-path-card {
+        margin-bottom: 20px;
+      }
+
+      .path-timeline {
+        position: relative;
+        padding-left: 30px;
+      }
+
+      .path-node {
+        position: relative;
+        padding: 16px 20px;
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        margin-bottom: 16px;
+      }
+
+      .path-node.current {
+        border-color: #667eea;
+        background: linear-gradient(135deg, #f8fafc, #ede9fe);
+      }
+
+      .path-level {
+        position: absolute;
+        left: -26px;
+        top: 16px;
+        width: 22px;
+        height: 22px;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
         font-size: 11px;
-        opacity: 0.85;
+        font-weight: 700;
+      }
+
+      .path-node.current .path-level {
+        background: linear-gradient(135deg, #10b981, #059669);
+        box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.2);
+      }
+
+      .path-connector {
+        position: absolute;
+        left: -15px;
+        bottom: -17px;
+        width: 2px;
+        height: 17px;
+        background: #d1d5db;
+      }
+
+      .path-title {
+        margin: 0 0 8px 0;
+        font-size: 15px;
+        font-weight: 700;
+        color: #1f2937;
+      }
+
+      .path-meta {
+        display: flex;
+        gap: 16px;
+        margin-bottom: 10px;
+      }
+
+      .path-years, .path-salary {
+        font-size: 12px;
+        color: #6b7280;
+        background: #f3f4f6;
+        padding: 3px 10px;
+        border-radius: 12px;
+      }
+
+      .path-salary {
+        color: #059669;
+        font-weight: 600;
+      }
+
+      .path-requirements {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-bottom: 10px;
+      }
+
+      .req-tag {
+        font-size: 11px;
+        color: #4b5563;
+        background: #f3f4f6;
+        padding: 4px 10px;
+        border-radius: 12px;
+      }
+
+      .path-focus {
+        margin: 0;
+        font-size: 13px;
+        color: #6b7280;
         font-style: italic;
       }
-      
-      /* 加载动画 */
-      @keyframes pulse {
+
+      /* ========== 发展时间线 ========== */
+      .development-timeline {
+        margin-bottom: 20px;
+      }
+
+      .timeline-vertical {
+        position: relative;
+        padding-left: 24px;
+      }
+
+      .timeline-vertical::before {
+        content: '';
+        position: absolute;
+        left: 8px;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: linear-gradient(to bottom, #667eea, #764ba2);
+      }
+
+      .timeline-item {
+        position: relative;
+        padding: 14px 18px;
+        background: #f9fafb;
+        border-radius: 10px;
+        margin-bottom: 12px;
+      }
+
+      .timeline-marker {
+        position: absolute;
+        left: -20px;
+        top: 16px;
+        width: 18px;
+        height: 18px;
+        background: white;
+        border: 3px solid #667eea;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        font-weight: 700;
+        color: #667eea;
+      }
+
+      .timeline-content h5 {
+        margin: 0 0 6px 0;
+        font-size: 14px;
+        font-weight: 700;
+        color: #1f2937;
+      }
+
+      .timeline-focus {
+        margin: 0 0 8px 0;
+        font-size: 13px;
+        color: #6b7280;
+      }
+
+      .timeline-skills {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .skill-tag {
+        font-size: 11px;
+        color: #667eea;
+        background: #ede9fe;
+        padding: 3px 10px;
+        border-radius: 12px;
+      }
+
+      /* ========== 行动计划 ========== */
+      .action-plan-card {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 20px;
+        border: 1px solid #e5e7eb;
+      }
+
+      .action-plan-card.short-plan {
+        border-left: 4px solid #10b981;
+      }
+
+      .action-plan-card.mid-plan {
+        border-left: 4px solid #f59e0b;
+      }
+
+      .plan-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+      }
+
+      .plan-period {
+        font-size: 13px;
+        font-weight: 700;
+        padding: 5px 14px;
+        border-radius: 20px;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: white;
+      }
+
+      .short-plan .plan-period { background: linear-gradient(135deg, #10b981, #059669); }
+      .mid-plan .plan-period { background: linear-gradient(135deg, #f59e0b, #d97706); }
+
+      .plan-goal {
+        margin: 0;
+        font-size: 15px;
+        color: #1f2937;
+      }
+
+      .plan-tasks {
+        margin-bottom: 16px;
+      }
+
+      .task-item {
+        display: flex;
+        gap: 12px;
+        padding: 12px;
+        background: #f9fafb;
+        border-radius: 8px;
+        margin-bottom: 10px;
+        transition: all 0.2s ease;
+      }
+
+      .task-item:hover {
+        background: #f3f4f6;
+      }
+
+      .task-checkbox {
+        font-size: 18px;
+        color: #d1d5db;
+        cursor: pointer;
+        user-select: none;
+        flex-shrink: 0;
+      }
+
+      .task-details {
+        flex: 1;
+      }
+
+      .task-name {
+        margin: 0 0 4px 0;
+        font-size: 14px;
+        font-weight: 600;
+        color: #1f2937;
+      }
+
+      .task-desc {
+        margin: 0 0 4px 0;
+        font-size: 13px;
+        color: #6b7280;
+      }
+
+      .task-deadline {
+        font-size: 11px;
+        color: #9ca3af;
+      }
+
+      .plan-milestones, .plan-resources {
+        margin-bottom: 14px;
+      }
+
+      .plan-milestones h5, .plan-resources h5 {
+        margin: 0 0 10px 0;
+        font-size: 13px;
+        font-weight: 700;
+        color: #374151;
+      }
+
+      .milestones-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .milestone-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 12px;
+        background: #f0fdf4;
+        border-radius: 8px;
+        font-size: 13px;
+      }
+
+      .milestone-month {
+        font-weight: 700;
+        color: #059669;
+        min-width: 70px;
+      }
+
+      .milestone-desc {
+        color: #4b5563;
+      }
+
+      .resources-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .resource-tag {
+        font-size: 12px;
+        color: #667eea;
+        background: #ede9fe;
+        padding: 5px 12px;
+        border-radius: 16px;
+      }
+
+      /* ========== 评估指标 ========== */
+      .evaluation-metrics-card {
+        background: linear-gradient(135deg, #fdf4ff, #fae8ff);
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 20px;
+        border: 1px solid #e9d5ff;
+      }
+
+      .eval-cycle {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 16px;
+        font-size: 14px;
+        font-weight: 600;
+        color: #7c3aed;
+      }
+
+      .metrics-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 14px;
+      }
+
+      .metric-card {
+        background: white;
+        border-radius: 10px;
+        padding: 16px;
+        border: 1px solid #e5e7eb;
+      }
+
+      .metric-name {
+        margin: 0 0 8px 0;
+        font-size: 13px;
+        font-weight: 600;
+        color: #374151;
+      }
+
+      .metric-target {
+        font-size: 20px;
+        font-weight: 800;
+        color: #7c3aed;
+        margin-bottom: 6px;
+      }
+
+      .metric-measure {
+        font-size: 11px;
+        color: #9ca3af;
+        margin: 0 0 10px 0;
+      }
+
+      .progress-bar {
+        height: 8px;
+        background: #e5e7eb;
+        border-radius: 4px;
+        overflow: hidden;
+      }
+
+      .progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #c084fc, #a855f7);
+        border-radius: 4px;
+        animation: progressPulse 2s infinite;
+      }
+
+      @keyframes progressPulse {
         0%, 100% { opacity: 1; }
         50% { opacity: 0.7; }
       }
-      
-      .download-btn.loading {
-        animation: pulse 1.5s infinite;
+
+      /* ========== 成果展示模板 ========== */
+      .achievement-template-card {
+        margin-bottom: 20px;
+      }
+
+      .template-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 14px;
+      }
+
+      .template-category {
+        background: #f9fafb;
+        border-radius: 10px;
+        padding: 16px;
+        border: 1px solid #e5e7eb;
+      }
+
+      .template-category h5 {
+        margin: 0 0 10px 0;
+        font-size: 14px;
+        font-weight: 700;
+        color: #1f2937;
+      }
+
+      .template-category ul {
+        margin: 0;
+        padding-left: 16px;
+        list-style: none;
+      }
+
+      .template-category li {
+        position: relative;
+        padding: 5px 0 5px 16px;
+        font-size: 13px;
+        color: #4b5563;
+      }
+
+      .template-category li::before {
+        content: '✓';
+        position: absolute;
+        left: 0;
+        color: #10b981;
+        font-weight: bold;
+      }
+
+      /* ========== 增强下载区域 ========== */
+      .download-section-enhanced {
+        background: linear-gradient(135deg, #1e1b4b, #312e81);
+        padding: 28px;
+        text-align: center;
+      }
+
+      .download-title {
+        margin: 0 0 8px 0;
+        font-size: 18px;
+        font-weight: 700;
+        color: white;
+      }
+
+      .download-desc {
+        margin: 0 0 20px 0;
+        font-size: 13px;
+        color: rgba(255,255,255,0.7);
+      }
+
+      .download-buttons-enhanced {
+        display: flex;
+        justify-content: center;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+
+      .dl-btn {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        padding: 16px 28px;
+        border: none;
+        border-radius: 12px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        min-width: 120px;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .dl-btn::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: rgba(255,255,255,0.1);
+        opacity: 0;
+        transition: opacity 0.3s;
+      }
+
+      .dl-btn:hover::after { opacity: 1; }
+      .dl-btn:hover { transform: translateY(-4px); box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
+
+      .dl-markdown { background: linear-gradient(135deg, #059669, #047857); color: white; }
+      .dl-pdf { background: linear-gradient(135deg, #dc2626, #b91c1c); color: white; }
+      .dl-word { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: white; }
+
+      .dl-icon { font-size: 24px; }
+      .dl-text { font-size: 14px; font-weight: 600; }
+      .dl-format { font-size: 11px; opacity: 0.75; }
+
+      .dl-btn.loading {
         pointer-events: none;
+        animation: dlPulse 1.5s infinite;
+      }
+
+      @keyframes dlPulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.6; }
+      }
+
+      /* ========== 响应式适配 ========== */
+      @media (max-width: 768px) {
+        .report-header-main { padding: 18px 20px; }
+        .report-module { padding: 18px 20px; }
+        .match-overview-card { flex-direction: column; text-align: center; }
+        .goals-container { flex-direction: column; }
+        .goal-arrow { transform: rotate(90deg); }
+        .data-table { font-size: 12px; }
+        .data-table th, .data-table td { padding: 8px 10px; }
+        .metrics-grid { grid-template-columns: 1fr; }
+        .template-grid { grid-template-columns: 1fr; }
       }
     `
     
