@@ -2018,8 +2018,11 @@ ${jobsSummary}
     if (isAIAskingExpectations && message) {
       // 保存用户回答
       const questionKeys: Array<keyof CareerExpectations> = ['industry', 'jobType', 'city', 'salary', 'other']
+      console.log(`处理用户回答，当前问题: ${currentExpectationQuestion + 1}/5`)
+      
       if (currentExpectationQuestion < questionKeys.length) {
         careerExpectations[questionKeys[currentExpectationQuestion]] = message.trim()
+        console.log(`已保存第${currentExpectationQuestion + 1}个问题的回答:`, questionKeys[currentExpectationQuestion], '=', message.trim())
         
         // 调用渐进式筛选（每回答一个问题就筛选一次，后台执行）
         if (progressiveFilterSessionId && progressiveFilterInitialized) {
@@ -2032,6 +2035,14 @@ ${jobsSummary}
         
         // 增加问题计数
         currentExpectationQuestion++
+        console.log(`问题计数增加到: ${currentExpectationQuestion}/5`)
+        
+        // 如果刚回答完第5个问题，给个日志提示
+        if (currentExpectationQuestion === 5) {
+          console.log('✅ 已收集完5个问题，等待AI说"为您匹配岗位"后触发最终匹配')
+        }
+      } else {
+        console.log('⚠️ 已经收集了5个问题，但还在处理回答，这可能有问题')
       }
       // 不返回，继续走正常流程让AI继续对话
     }
@@ -2588,13 +2599,26 @@ ${jobsSummary}
         }
         
         // 检测AI是否完成所有问题（说感谢的话）
-        if (finalContentToSave.includes('太感谢您的耐心配合') || 
+        // 关键修复：只有当我们确实收集了5个回答后才触发匹配
+        if ((finalContentToSave.includes('太感谢您的耐心配合') || 
             finalContentToSave.includes('为您匹配岗位') ||
-            finalContentToSave.includes('请稍等片刻')) {
-          console.log('AI完成问题收集，开始提取用户回答并调用岗位匹配')
+            finalContentToSave.includes('请稍等片刻')) && 
+            isAIAskingExpectations && 
+            currentExpectationQuestion >= 5) {
+          console.log('AI完成5个问题收集，开始提取用户回答并调用岗位匹配')
+          console.log('当前问题计数:', currentExpectationQuestion)
+          
+          // 重置标志
+          isAIAskingExpectations = false
+          currentExpectationQuestion = 0
           
           // 从对话历史中提取用户的5个回答
           extractAndCallJobMatch()
+        } else if (finalContentToSave.includes('为您匹配岗位') || 
+                   finalContentToSave.includes('请稍等片刻')) {
+          // 如果AI说了匹配的话但我们还没收集完5个问题，不触发匹配
+          console.log('AI提到匹配但未收集完5个问题，忽略，继续对话')
+          console.log('当前问题计数:', currentExpectationQuestion, '/5')
         }
         
         // 检测岗位匹配完成后，用户是否想要调整
