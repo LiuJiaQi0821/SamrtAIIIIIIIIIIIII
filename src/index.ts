@@ -87,8 +87,13 @@ function createApp() {
           <div class="hidden lg:flex items-center px-4 py-3">
             <h2 class="text-xl font-semibold text-gray-700">职业规划过程展示</h2>
           </div>
-          <!-- 卡片内容区域（初始为空，只有收到JSON数据后才展示） -->
+          <!-- 卡片内容区域 -->
           <div id="cards-content" class="flex-1 overflow-auto p-4 lg:p-6">
+            <div class="flex items-center justify-center h-full">
+              <div class="text-center text-gray-400">
+                <p class="text-sm">暂无卡片内容</p>
+              </div>
+            </div>
           </div>
         </div>
       </aside>
@@ -622,9 +627,15 @@ function createApp() {
     const cardsContent = document.getElementById('cards-content')
     if (!cardsContent) return
     
-    // 如果没有任何画像数据，保持内容区域为空
+    // 如果没有任何画像数据，显示简单提示
     if (!profile.resumeScore && !profile.abilityAnalysis && !profile.studentProfile && !profile.jobMatch) {
-      cardsContent.innerHTML = ''
+      cardsContent.innerHTML = `
+        <div class="flex items-center justify-center h-full">
+          <div class="text-center text-gray-400">
+            <p class="text-sm">暂无卡片内容</p>
+          </div>
+        </div>
+      `
       return
     }
     
