@@ -2707,6 +2707,20 @@ ${jobsSummary}
           }
           careerExpectations = {}
           
+          // 【关键修复】清除之前的 jobMatch 数据，避免显示旧的匹配卡片！
+          try {
+            const existingProfile = JSON.parse(localStorage.getItem('studentProfile') || '{}')
+            if (existingProfile.jobMatch) {
+              console.log('清除旧的 jobMatch 数据')
+              delete existingProfile.jobMatch
+              localStorage.setItem('studentProfile', JSON.stringify(existingProfile))
+              // 更新卡片，清除岗位匹配卡片的显示！
+              updateProfileCard(existingProfile)
+            }
+          } catch (e) {
+            console.error('清除旧 jobMatch 数据时出错:', e)
+          }
+          
           // 初始化渐进式筛选
           initProgressiveFilter()
         }
