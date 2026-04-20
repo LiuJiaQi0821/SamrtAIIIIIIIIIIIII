@@ -1949,22 +1949,23 @@ ${jobsSummary}
       return
     }
     
-    const message = messageInput?.value.trim()
+    // 先读取消息值，后面要用
+    const userMessage = messageInput?.value.trim()
     
     // 检查是否要调整条件
-    if (message) {
+    if (userMessage) {
       const adjustKeywords = ['调整', '修改', '重新匹配', '换一下', '不满意', '换岗位', '重新筛选', '换条件', '改一下', '重新选', '重新找']
-      const wantsToAdjust = adjustKeywords.some(keyword => message.includes(keyword))
+      const wantsToAdjust = adjustKeywords.some(keyword => userMessage.includes(keyword))
       
       if (wantsToAdjust && Object.keys(careerExpectations).length > 0) {
         console.log('用户想要调整条件，显示修改选项')
-        await showAdjustOptions(message)
+        await showAdjustOptions(userMessage)
         return
       }
       
       // 如果正在调整条件，处理调整流程
       if (isAdjustingConditions) {
-        await handleAdjustmentStep(message)
+        await handleAdjustmentStep(userMessage)
         return
       }
     }
@@ -1983,7 +1984,7 @@ ${jobsSummary}
     uploadedFile = null
     uploadedFileUrl = null
 
-    const message = messageInput?.value.trim()
+    const message = userMessage  // 使用前面已经读取的值
     if (!message && !pendingFile) {
       isGenerating = false
       return
