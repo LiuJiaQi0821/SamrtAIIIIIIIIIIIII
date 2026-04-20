@@ -1635,10 +1635,21 @@ ${currentConditions.join('\n')}
       
       console.log('初始化渐进式筛选，sessionId:', progressiveFilterSessionId)
       
+      // 从 localStorage 获取学生画像
+      let studentProfile = null
+      try {
+        studentProfile = JSON.parse(localStorage.getItem('studentProfile') || '{}')
+      } catch (e) {
+        console.error('读取学生画像失败:', e)
+      }
+      
       const response = await fetch('/api/progressive-filter-v2/init', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: progressiveFilterSessionId })
+        body: JSON.stringify({ 
+          sessionId: progressiveFilterSessionId,
+          profile: studentProfile
+        })
       })
       
       const result = await response.json()

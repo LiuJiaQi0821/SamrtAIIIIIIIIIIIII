@@ -546,14 +546,15 @@ async function filterJobsByProfile(profile: any, allJobs: JobRecord[]): Promise<
   
   let filtered = [...allJobs];
   
-  if (profile.education && profile.education.education_level) {
+  // 【关键修复】先检查 profile 是否存在，再访问属性
+  if (profile && profile.education && profile.education.education_level) {
     const eduLevel = profile.education.education_level;
     if (eduLevel.includes('本科') || eduLevel.includes('硕士') || eduLevel.includes('博士')) {
       console.log('🎓 学历背景优秀，保留所有岗位');
     }
   }
   
-  if (profile.experiences && profile.experiences.length > 0) {
+  if (profile && profile.experiences && profile.experiences.length > 0) {
     const exp = profile.experiences[0];
     if (exp.department || exp.position) {
       const keyword = (exp.department || exp.position || '').toLowerCase();
