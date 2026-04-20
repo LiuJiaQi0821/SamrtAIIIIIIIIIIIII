@@ -1672,38 +1672,26 @@ ${jobsSummary}
       filePreview?.classList.remove('flex')
     }
 
-    // 如果正在收集职业期望，先处理用户回答
+    // 如果正在收集职业期望，先处理用户回答（不阻塞AI继续对话）
     if (isAIAskingExpectations && message) {
       // 保存用户回答
       const questionKeys: Array<keyof CareerExpectations> = ['industry', 'jobType', 'city', 'salary', 'other']
       if (currentExpectationQuestion < questionKeys.length) {
         careerExpectations[questionKeys[currentExpectationQuestion]] = message.trim()
         
-        // 调用渐进式筛选（每回答一个问题就筛选一次）
+        // 调用渐进式筛选（每回答一个问题就筛选一次，后台执行）
         if (progressiveFilterSessionId && progressiveFilterInitialized) {
           console.log(`回答第${currentExpectationQuestion + 1}个问题，开始渐进式筛选`)
-          await executeProgressiveFilterStep(currentExpectationQuestion + 1, message.trim())
+          // 后台执行，不等待
+          executeProgressiveFilterStep(currentExpectationQuestion + 1, message.trim()).catch(err => {
+            console.error('渐进式筛选出错:', err)
+          })
         }
         
         // 增加问题计数
         currentExpectationQuestion++
       }
-      
-      // 添加用户消息到界面
-      addMessage(message, true)
-      messageInput.value = ''
-      
-      // 这里不需要做其他处理，直接返回，让AI继续对话
-      // 重置 isGenerating 标志
-      isGenerating = false
-      
-      // 恢复发送按钮
-      if (sendBtn) {
-        sendBtn.style.opacity = '1'
-        sendBtn.style.pointerEvents = 'auto'
-      }
-      
-      return
+      // 不返回，继续走正常流程让AI继续对话
     }
     
     // 旧的前端职业期望收集逻辑（已禁用）
