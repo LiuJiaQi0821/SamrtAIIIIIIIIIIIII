@@ -555,6 +555,23 @@ function createApp() {
     document: { bg: '#E8F4FC', color: '#6B7280', text: 'Txt', label: '文档' }
   }
 
+  // 判断是否是"无要求"的回答
+  function isNoPreferenceAnswer(answer: string): boolean {
+    if (!answer || typeof answer !== 'string') return true;
+    
+    const normalized = answer.toLowerCase().trim();
+    
+    // 无要求的关键词
+    const noPreferenceKeywords = [
+      '没有', '无', '随便', '都可以', '都行', '无所谓', 
+      '不知道', '不清楚', '没要求', '不限制', '任意',
+      'no', 'none', 'any', 'whatever', 'dont care', 'don\'t care',
+      'not sure', '不确定'
+    ];
+    
+    return noPreferenceKeywords.some(keyword => normalized.includes(keyword));
+  }
+  
   // 颜色加深/变浅辅助函数
   function adjustColor(hex: string, amount: number): string {
     const num = parseInt(hex.replace('#', ''), 16)
@@ -1310,8 +1327,17 @@ ${currentConditions.join('\n')}
       const selectedOption = parseInt(conditionsToModify[0])
       const key = questionKeys[selectedOption]
       
-      // 更新条件
-      careerExpectations[key as keyof CareerExpectations] = message.trim()
+      // 判断是否是"无要求"的回答
+      const isNoPreference = isNoPreferenceAnswer(message)
+      
+      if (isNoPreference) {
+        console.log(`用户对${labels[selectedOption]}回答"无要求"，清除此条件`)
+        // 如果是"无要求"，就清除这个条件
+        delete careerExpectations[key as keyof CareerExpectations]
+      } else {
+        // 更新条件
+        careerExpectations[key as keyof CareerExpectations] = message.trim()
+      }
       
       // 显示处理中
       const aiMessageDiv = addMessage('好的，正在根据新条件重新匹配岗位……', false)
@@ -1639,7 +1665,13 @@ ${currentConditions.join('\n')}
     
     recentAnswers.forEach((answer, idx) => {
       if (idx < questionKeys.length && answer) {
-        expectations[questionKeys[idx]] = answer
+        // 判断是否是"无要求"的回答
+        const isNoPreference = isNoPreferenceAnswer(answer)
+        if (!isNoPreference) {
+          expectations[questionKeys[idx]] = answer
+        } else {
+          console.log(`用户对第${idx + 1}个问题回答"无要求"，跳过此条件`)
+        }
       }
     })
     
