@@ -1383,7 +1383,117 @@ ${currentConditions.join('\n')}
         const aiMessageDiv = addMessage(askMessage, false)
         conversationHistory.push({ role: 'assistant', content: askMessage })
       } else {
-        // 用户直接说了新条件，尝试理解
+        // 用户直接说了新条件，先尝试简单直接处理（城市、薪资等）
+        console.log('用户直接说了新条件，尝试简单处理:', message)
+        
+        // 先检查是否直接是城市名（包含"广州"、"杭州"、"北京"、"上海"等）
+        const cityMatch = message.match(/(广州|杭州|北京|上海|深圳|成都|武汉|西安|南京|重庆|天津|苏州|杭州|青岛|长沙|大连|厦门|宁波|无锡|合肥|佛山|郑州|昆明|济南|福州|温州|哈尔滨|石家庄|泉州|南宁|贵阳|南昌|金华|常州|珠海|惠州|嘉兴|南通|中山|东莞|烟台|兰州|海口|银川|西宁|乌鲁木齐)/)
+        
+        if (cityMatch) {
+          // 用户直接说城市名！直接修改条件并触发匹配！
+          console.log('检测到用户直接说城市名:', cityMatch[1])
+          
+          // 更新城市条件
+          careerExpectations.city = cityMatch[1]
+          
+          // 显示处理中
+          addMessage(message, true)
+          messageInput.value = ''
+          
+          const aiMessageDiv = addMessage('好的，正在为您重新匹配' + cityMatch[1] + '地区的岗位……', false)
+          const aiTextElement = aiMessageDiv?.querySelector('.ai-message') as HTMLElement
+          
+          // 重置状态
+          isAdjustingConditions = false
+          adjustingStep = 0
+          
+          // 隐藏发送按钮，显示停止按钮
+          if (sendBtn) sendBtn.classList.add('hidden')
+          if (stopBtn) stopBtn.classList.remove('hidden')
+          
+          try {
+            isGenerating = true
+            
+            // 重新初始化渐进式筛选，用新条件
+            await initProgressiveFilter()
+            
+            // 模拟逐步筛选
+            const questionKeys = ['industry', 'jobType', 'city', 'salary', 'other']
+            for (let i = 0; i < questionKeys.length; i++) {
+              const key = questionKeys[i]
+              const value = careerExpectations[key as keyof CareerExpectations]
+              if (value) {
+                await executeProgressiveFilterStep(i + 1, value)
+              }
+            }
+            
+            // 获取最终筛选结果
+            const filterResult = await getFinalFilteredJobs()
+            
+            // 从 localStorage 获取学生画像
+            const studentProfile = JSON.parse(localStorage.getItem('studentProfile') || '{}')
+            
+            // 进行AI匹配
+            let result: any = null
+            if (filterResult && filterResult.jobs && filterResult.jobs.length > 0) {
+              result = await performAIMatching(filterResult.jobs, studentProfile, filterResult.message)
+            } else {
+              // 回退到传统方式
+              const matchRequest = {
+                expectations: careerExpectations,
+                profile: studentProfile
+              }
+              
+              const response = await fetch('/api/job-match', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(matchRequest)
+              })
+              
+              result = await response.json()
+            }
+            
+            // 保存匹配分析结果
+            if (result.analysis) {
+              const existingProfile = JSON.parse(localStorage.getItem('studentProfile') || '{}')
+              existingProfile.jobMatch = result.analysis
+              localStorage.setItem('studentProfile', JSON.stringify(existingProfile))
+              
+              // 更新卡片UI
+              updateProfileCard(existingProfile)
+            }
+            
+            // 显示结果
+            if (aiTextElement) {
+              aiTextElement.textContent = result.message || '已根据新条件重新匹配，请查看左侧卡片！'
+            }
+            
+            conversationHistory.push({ role: 'assistant', content: result.message || '已根据新条件重新匹配，请查看左侧卡片！' })
+            
+          } catch (error) {
+            console.error('重新匹配出错:', error)
+            if (aiTextElement) {
+              aiTextElement.textContent = '抱歉，重新匹配时出现问题，请稍后重试。'
+            }
+          } finally {
+            isGenerating = false
+            
+            // 恢复发送按钮
+            if (sendBtn) {
+              sendBtn.classList.remove('hidden')
+              sendBtn.style.opacity = '1'
+              sendBtn.style.pointerEvents = 'auto'
+            }
+            if (stopBtn) {
+              stopBtn.classList.add('hidden')
+            }
+          }
+          
+          return
+        }
+        
+        // 如果不是简单城市名，才走AI重新理解的流程
+        console.log('不是简单城市名，走AI重新理解流程')
         isAdjustingConditions = false
         adjustingStep = 0
         
@@ -2093,7 +2203,7 @@ ${jobsSummary}
     
     // 检查是否要调整条件
     if (userMessage) {
-      const adjustKeywords = ['调整', '修改', '重新匹配', '换一下', '不满意', '换岗位', '重新筛选', '换条件', '改一下', '重新选', '重新找']
+      const adjustKeywords = ['调整', '修改', '重新匹配', '换一下', '不满意', '换岗位', '重新筛选', '换条件', '改一下', '重新选', '重新找', '换一些', '换个', '换地区', '换城市', '换薪资', '换行业']
       const wantsToAdjust = adjustKeywords.some(keyword => userMessage.includes(keyword))
       
       if (wantsToAdjust && Object.keys(careerExpectations).length > 0) {
