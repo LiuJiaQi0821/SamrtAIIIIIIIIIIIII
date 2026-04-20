@@ -1762,37 +1762,24 @@ ${currentConditions.join('\n')}
   async function performAIMatching(jobs: any[], profile: any, baseMessage: string) {
     console.log('开始AI匹配度打分，岗位数:', jobs.length)
     
-    // 如果没有岗位，直接返回
-    if (jobs.length === 0) {
-      console.log('没有岗位数据，跳过AI匹配')
-      return {
-        success: true,
-        message: baseMessage || '岗位匹配分析已完成，请查看左侧卡片！',
-        analysis: null,
-        jobs: jobs
-      }
-    }
-    
     // 调用AI进行匹配度分析
     let matchAnalysis = null
-    
-    // 构建AI分析提示词
-    const jobsForAnalysis = jobs.slice(0, 20) // 减少到20个岗位，避免超时
-    console.log('使用', jobsForAnalysis.length, '个岗位进行分析')
-    
-    const jobsSummary = jobsForAnalysis.map((job: any, idx: number) => `
+    if (jobs.length > 0) {
+      // 构建AI分析提示词
+      const jobsForAnalysis = jobs.slice(0, 50) // 最多取50个岗位给AI分析
+      const jobsSummary = jobsForAnalysis.map((job: any, idx: number) => `
 岗位${idx + 1}:
 - 岗位名称: ${job.title}
 - 公司: ${job.company}
 - 薪资: ${job.salary}
 - 地点: ${job.location}
 - 行业: ${job.industry}
-- 描述: ${job.description?.substring(0, 150) || '无'}
+- 描述: ${job.description?.substring(0, 200) || '无'}
 `).join('\n')
-    
-    const profileSummary = JSON.stringify(profile, null, 2)
-    
-    const analysisPrompt = `请进行人岗匹配度分析，严格按照以下要求输出：
+      
+      const profileSummary = JSON.stringify(profile, null, 2)
+      
+      const analysisPrompt = `请进行人岗匹配度分析，严格按照以下要求输出：
 
 【学生画像】
 ${profileSummary}
@@ -1894,29 +1881,21 @@ ${jobsSummary}
 \`\`\`
 
 注意：
-- 只需要给前5个岗位详细打分，其他岗位可以简化
-- 每个岗位需要包含 strengths（优势项）和 gaps（差距项）
+- 每个维度必须包含 strengths（优势项）和 gaps（差距项）
+- key_gaps 中的差距项需要在前端高亮显示
+- 权重必须根据岗位特点自适应调整
+- overall_score 是加权总分：(basic_score×basic_weight + skill_score×skill_weight + quality_score×quality_weight + potential_score×potential_weight) / 100
 - **不要输出任何友好提示语，只输出JSON代码块**
-- **请尽量快速响应，控制在30秒内完成**
 `;
       
       try {
-        console.log('开始调用AI分析...')
-        // 添加超时控制（60秒）
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 60000);
-        
         const chatResponse = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             messages: [{ role: 'user', content: analysisPrompt }]
-          }),
-          signal: controller.signal
+          })
         });
-        
-        clearTimeout(timeoutId);
-        console.log('AI响应收到，状态:', chatResponse.ok)
         
         if (chatResponse.ok) {
           const reader = chatResponse.body?.getReader();
@@ -1949,55 +1928,19 @@ ${jobsSummary}
             }
           }
           
-          console.log('AI响应内容长度:', aiResponse.length)
-          
           // 提取JSON分析结果
           const jsonMatch = aiResponse.match(/```json\s*([\s\S]*?)```/);
           if (jsonMatch) {
             try {
               matchAnalysis = JSON.parse(jsonMatch[1]);
-              console.log('AI匹配分析完成:', matchAnalysis.matches?.length || 0, '个岗位');
-            } catch (e) {
-              console.error('解析匹配分析JSON失败:', e);
-            }
-          } else {
-            console.log('未找到JSON代码块，尝试直接解析')
-            // 尝试直接解析
-            try {
-              matchAnalysis = JSON.parse(aiResponse);
-              console.log('直接解析JSON成功');
+              console.log('AI匹配分析完成:', Object.keys(matchAnalysis));
             } catch {
-              console.log('直接解析也失败，使用简化数据')
+              console.error('解析匹配分析JSON失败');
             }
           }
         }
       } catch (aiError) {
         console.error('AI分析失败:', aiError);
-      }
-    }
-    
-    // 如果AI分析失败，生成简化的匹配数据
-    if (!matchAnalysis) {
-      console.log('AI分析未完成，生成简化匹配数据')
-      matchAnalysis = {
-        matches: jobs.slice(0, 10).map((job: any, idx: number) => ({
-          job_title: job.title,
-          company: job.company,
-          salary: job.salary,
-          location: job.location,
-          industry: job.industry,
-          overall_score: 70 + Math.floor(Math.random() * 20),
-          match_percentage: (70 + Math.floor(Math.random() * 20)) + '%',
-          dimensions: {
-            basic_requirements: { score: 75, weight: 25, analysis: '基础要求基本匹配', strengths: ['学历匹配', '专业相关'], gaps: ['经验稍缺'] },
-            professional_skills: { score: 70, weight: 30, analysis: '技能有相关性', strengths: ['有相关技能'], gaps: ['需深入学习'] },
-            professional_quality: { score: 80, weight: 20, analysis: '综合素养良好', strengths: ['沟通能力', '团队协作'], gaps: [] },
-            development_potential: { score: 85, weight: 25, analysis: '发展潜力较大', strengths: ['学习能力强', '有进取心'], gaps: [] }
-          },
-          key_strengths: ['学习能力强', '专业背景匹配', '综合素养良好'],
-          key_gaps: ['实践经验有待加强'],
-          suggestions: '建议多积累相关项目经验，提升技能深度。'
-        }))
       }
     }
     
