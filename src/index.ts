@@ -1751,104 +1751,101 @@ ${currentConditions.join('\n')}
     
     console.log('构建的职业期望:', expectations)
     
-    // 只有当我们有至少一些回答时才调用
-    if (Object.keys(expectations).length > 0) {
-      // 显示正在匹配的消息
-      let matchMessage = '正在为您匹配岗位……'
-      if (filterResult) {
-        matchMessage = `正在为您匹配岗位（已筛选出 ${filterResult.totalCount} 个候选岗位）……`
-      }
-      const aiMessageDiv = addMessage(matchMessage, false)
-      const aiTextElement = aiMessageDiv?.querySelector('.ai-message') as HTMLElement
+    // 【关键修复】即使用户所有问题都回答"无要求"，也继续进行匹配！
+    // 因为有渐进式筛选结果，或者可以基于学生画像进行匹配
+    // 显示正在匹配的消息
+    let matchMessage = '正在为您匹配岗位……'
+    if (filterResult) {
+      matchMessage = `正在为您匹配岗位（已筛选出 ${filterResult.totalCount} 个候选岗位）……`
+    }
+    const aiMessageDiv = addMessage(matchMessage, false)
+    const aiTextElement = aiMessageDiv?.querySelector('.ai-message') as HTMLElement
+    
+    // 隐藏发送按钮，显示停止按钮
+    if (sendBtn) {
+      sendBtn.classList.add('hidden')
+    }
+    if (stopBtn) {
+      stopBtn.classList.remove('hidden')
+    }
+    
+    try {
+      isGenerating = true
       
-      // 隐藏发送按钮，显示停止按钮
+      // 先从 localStorage 获取学生画像
+      const studentProfile = JSON.parse(localStorage.getItem('studentProfile') || '{}')
+      
+      // 如果有渐进式筛选结果，直接用这些岗位进行AI匹配
+      let result: any = null
+      if (filterResult && filterResult.jobs && filterResult.jobs.length > 0) {
+        console.log('使用渐进式筛选结果进行AI匹配，岗位数:', filterResult.jobs.length)
+        
+        // 对筛选出的岗位进行AI匹配度打分
+        result = await performAIMatching(filterResult.jobs, studentProfile, filterResult.message)
+      } else {
+        console.log('使用传统岗位匹配API')
+        // 如果没有渐进式筛选结果，回退到传统方式
+        const matchRequest = {
+          expectations: expectations,
+          profile: studentProfile
+        }
+        
+        const response = await fetch('/api/job-match', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(matchRequest)
+        })
+        
+        if (!response.ok) {
+          throw new Error('匹配分析请求失败')
+        }
+        
+        result = await response.json()
+      }
+      
+      console.log('岗位匹配返回:', result.success ? '成功' : '失败')
+      
+      // 保存匹配分析结果到 localStorage
+      if (result.analysis) {
+        const existingProfile = JSON.parse(localStorage.getItem('studentProfile') || '{}')
+        existingProfile.jobMatch = result.analysis
+        localStorage.setItem('studentProfile', JSON.stringify(existingProfile))
+        
+        // 更新卡片UI
+        updateProfileCard(existingProfile)
+      }
+      
+      // 显示匹配分析结果
+      if (aiTextElement) {
+        aiTextElement.textContent = result.message || '岗位匹配分析已完成，请查看左侧卡片！'
+      }
+      
+      // 保存到历史
+      conversationHistory.push({ role: 'assistant', content: result.message || '岗位匹配分析已完成，请查看左侧卡片！' })
+      
+    } catch (error) {
+      console.error('Job match error:', error)
+      if (aiTextElement) {
+        aiTextElement.textContent = '抱歉，岗位匹配分析出现问题，请稍后重试。'
+      }
+    } finally {
+      isGenerating = false
+      isAIAskingExpectations = false
+      
+      // 清理渐进式筛选状态
+      progressiveFilterSessionId = null
+      progressiveFilterInitialized = false
+      progressiveFilterCounts = []
+      
+      // 恢复发送按钮，隐藏停止按钮
       if (sendBtn) {
-        sendBtn.classList.add('hidden')
+        sendBtn.classList.remove('hidden')
+        sendBtn.style.opacity = '1'
+        sendBtn.style.pointerEvents = 'auto'
       }
       if (stopBtn) {
-        stopBtn.classList.remove('hidden')
+        stopBtn.classList.add('hidden')
       }
-      
-      try {
-        isGenerating = true
-        
-        // 先从 localStorage 获取学生画像
-        const studentProfile = JSON.parse(localStorage.getItem('studentProfile') || '{}')
-        
-        // 如果有渐进式筛选结果，直接用这些岗位进行AI匹配
-        let result: any = null
-        if (filterResult && filterResult.jobs && filterResult.jobs.length > 0) {
-          console.log('使用渐进式筛选结果进行AI匹配，岗位数:', filterResult.jobs.length)
-          
-          // 对筛选出的岗位进行AI匹配度打分
-          result = await performAIMatching(filterResult.jobs, studentProfile, filterResult.message)
-        } else {
-          console.log('使用传统岗位匹配API')
-          // 如果没有渐进式筛选结果，回退到传统方式
-          const matchRequest = {
-            expectations: expectations,
-            profile: studentProfile
-          }
-          
-          const response = await fetch('/api/job-match', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(matchRequest)
-          })
-          
-          if (!response.ok) {
-            throw new Error('匹配分析请求失败')
-          }
-          
-          result = await response.json()
-        }
-        
-        console.log('岗位匹配返回:', result.success ? '成功' : '失败')
-        
-        // 保存匹配分析结果到 localStorage
-        if (result.analysis) {
-          const existingProfile = JSON.parse(localStorage.getItem('studentProfile') || '{}')
-          existingProfile.jobMatch = result.analysis
-          localStorage.setItem('studentProfile', JSON.stringify(existingProfile))
-          
-          // 更新卡片UI
-          updateProfileCard(existingProfile)
-        }
-        
-        // 显示匹配分析结果
-        if (aiTextElement) {
-          aiTextElement.textContent = result.message || '岗位匹配分析已完成，请查看左侧卡片！'
-        }
-        
-        // 保存到历史
-        conversationHistory.push({ role: 'assistant', content: result.message || '岗位匹配分析已完成，请查看左侧卡片！' })
-        
-      } catch (error) {
-        console.error('Job match error:', error)
-        if (aiTextElement) {
-          aiTextElement.textContent = '抱歉，岗位匹配分析出现问题，请稍后重试。'
-        }
-      } finally {
-        isGenerating = false
-        isAIAskingExpectations = false
-        
-        // 清理渐进式筛选状态
-        progressiveFilterSessionId = null
-        progressiveFilterInitialized = false
-        progressiveFilterCounts = []
-        
-        // 恢复发送按钮，隐藏停止按钮
-        if (sendBtn) {
-          sendBtn.classList.remove('hidden')
-          sendBtn.style.opacity = '1'
-          sendBtn.style.pointerEvents = 'auto'
-        }
-        if (stopBtn) {
-          stopBtn.classList.add('hidden')
-        }
-      }
-    } else {
-      console.log('没有提取到足够的职业期望回答')
     }
   }
   
