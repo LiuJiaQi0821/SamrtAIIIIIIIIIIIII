@@ -2690,12 +2690,21 @@ ${jobsSummary}
       
       // ========== 检测AI职业期望问题收集状态 ==========
       if (finalContentToSave) {
-        // 检测AI是否开始问职业期望问题
-        if (finalContentToSave.includes('期望从事的行业') || 
-            finalContentToSave.includes('职业期望')) {
+        // 检测AI是否开始问职业期望问题（更宽松的匹配）
+        if (finalContentToSave.includes('期望从事') || 
+            finalContentToSave.includes('职业期望') ||
+            finalContentToSave.includes('想了解一下您') ||
+            finalContentToSave.includes('您期望的岗位类型') ||
+            finalContentToSave.includes('您期望在哪个城市') ||
+            finalContentToSave.includes('关于薪资方面') ||
+            finalContentToSave.includes('最后一个问题啦') ||
+            finalContentToSave.includes('太棒了！我已经完成了您的简历分析')) {
           console.log('AI开始询问职业期望问题，初始化渐进式筛选')
           isAIAskingExpectations = true
-          currentExpectationQuestion = 0
+          // 如果还没有设置问题计数，初始化为0
+          if (currentExpectationQuestion === undefined || currentExpectationQuestion < 0) {
+            currentExpectationQuestion = 0
+          }
           careerExpectations = {}
           
           // 初始化渐进式筛选
