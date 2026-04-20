@@ -165,6 +165,125 @@ function fuzzyMatch(text: string | null, pattern: string): boolean {
   return false;
 }
 
+// 使用预分类表进行高效筛选
+async function filterJobsByClassification(filters: FilterState['filters'], step: number): Promise<number[]> {
+  const db = getSupabaseClient();
+  if (!db) {
+    throw new Error('数据库未配置');
+  }
+  
+  console.log(`🚀 使用预分类表进行第${step}步高效筛选`);
+  console.log('筛选条件:', filters);
+  
+  // 从全库开始
+  let baseQuery = db.from('jobs').select('id', { count: 'exact' });
+  let filteredIds: number[] = [];
+  
+  // 第1步：行业筛选（使用 job_industries 表）
+  if (step >= 1 && filters.industry) {
+    const industryInput = filters.industry;
+    const industries = industryInput.split(/[,，\s、]+/).filter(i => i.trim());
+    
+    if (industries.length > 0) {
+      console.log(`🏭 行业筛选: ${industries.join(', ')}`);
+      
+      // 使用 job_industries 表进行高效筛选
+      const { data, error } = await db
+        .from('job_industries')
+        .select('job_id')
+        .in('industry', industries);
+      
+      if (error) {
+        console.warn('使用预分类表失败，回退到普通筛选:', error);
+      } else {
+        filteredIds = data?.map(d => d.job_id) || [];
+        console.log(`✅ 行业筛选后: ${filteredIds.length} 个岗位`);
+      }
+    }
+  }
+  
+  // 第2步：岗位类型筛选（使用 job_keywords 表）
+  if (step >= 2 && filters.jobType) {
+    const jobTypeInput = filters.jobType;
+    const jobTypes = jobTypeInput.split(/[,，\s、]+/).filter(j => j.trim());
+    
+    if (jobTypes.length > 0) {
+      console.log(`💼 岗位类型筛选: ${jobTypes.join(', ')}`);
+      
+      try {
+        // 使用 job_keywords 表进行高效筛选
+        const { data, error } = await db
+          .from('job_keywords')
+          .select('job_id')
+          .in('keyword', jobTypes)
+          .in('keyword_type', ['title', 'description']);
+        
+        if (error) {
+          console.warn('使用关键词表失败:', error);
+        } else {
+          const keywordIds = data?.map(d => d.job_id) || [];
+          
+          // 如果之前已经有筛选结果，取交集；否则使用这次的结果
+          if (filteredIds.length > 0) {
+            filteredIds = filteredIds.filter(id => keywordIds.includes(id));
+          } else {
+            filteredIds = keywordIds;
+          }
+          
+          console.log(`✅ 岗位类型筛选后: ${filteredIds.length} 个岗位`);
+        }
+      } catch (e) {
+        console.warn('关键词筛选失败:', e);
+      }
+    }
+  }
+  
+  // 第3步：城市筛选（使用 job_cities 表）
+  if (step >= 3 && filters.city) {
+    const cityInput = filters.city;
+    const cities = cityInput.split(/[,，\s、]+/).filter(c => c.trim());
+    
+    if (cities.length > 0) {
+      console.log(`🏙️ 城市筛选: ${cities.join(', ')}`);
+      
+      try {
+        // 使用 job_cities 表进行高效筛选
+        const { data, error } = await db
+          .from('job_cities')
+          .select('job_id')
+          .in('city', cities);
+        
+        if (error) {
+          console.warn('使用城市表失败:', error);
+        } else {
+          const cityIds = data?.map(d => d.job_id) || [];
+          
+          // 如果之前已经有筛选结果，取交集；否则使用这次的结果
+          if (filteredIds.length > 0) {
+            filteredIds = filteredIds.filter(id => cityIds.includes(id));
+          } else {
+            filteredIds = cityIds;
+          }
+          
+          console.log(`✅ 城市筛选后: ${filteredIds.length} 个岗位`);
+        }
+      } catch (e) {
+        console.warn('城市筛选失败:', e);
+      }
+    }
+  }
+  
+  // 如果预分类表筛选出了结果，返回结果
+  if (filteredIds.length > 0) {
+    console.log(`🎉 预分类表筛选完成: ${filteredIds.length} 个岗位`);
+    return filteredIds;
+  }
+  
+  // 如果预分类表没有结果，返回空数组（让前端知道可以继续）
+  console.log('⚠️ 预分类表未找到结果，将使用传统方法');
+  return [];
+}
+
 // 从数据库获取所有岗位（带缓存）
 async function getAllJobs(): Promise<JobRecord[]> {
   const db = getSupabaseClient();
@@ -201,6 +320,27 @@ async function getAllJobs(): Promise<JobRecord[]> {
   }
   
   return allJobs;
+}
+
+// 根据ID列表获取岗位详情
+async function getJobsByIds(jobIds: number[]): Promise<JobRecord[]> {
+  if (jobIds.length === 0) return [];
+  
+  const db = getSupabaseClient();
+  if (!db) {
+    throw new Error('数据库未配置');
+  }
+  
+  const { data, error } = await db
+    .from('jobs')
+    .select('id,job_title,company_name,salary_range,address,industry,company_type,company_size,job_description')
+    .in('id', jobIds);
+  
+  if (error) {
+    throw error;
+  }
+  
+  return (data || []) as JobRecord[];
 }
 
 // 根据筛选条件过滤岗位
@@ -353,16 +493,38 @@ router.post('/api/progressive-filter/step', async (req, res) => {
     
     filterState.step = step;
     
-    // 获取当前筛选范围的岗位
-    const currentJobs = filterState.allJobs.filter(job => 
-      filterState.filteredJobIds.includes(job.id)
-    );
+    // 优先尝试使用预分类表进行高效筛选
+    let filteredJobs: JobRecord[] = [];
+    let usedOptimizedFilter = false;
     
-    // 执行筛选
-    const filteredJobs = filterJobs(currentJobs, filterState.filters, step);
+    try {
+      const optimizedIds = await filterJobsByClassification(filterState.filters, step);
+      
+      if (optimizedIds.length > 0) {
+        // 使用预分类表筛选成功
+        filteredJobs = await getJobsByIds(optimizedIds);
+        filterState.filteredJobIds = optimizedIds;
+        usedOptimizedFilter = true;
+        console.log(`✅ 使用预分类表筛选成功: ${filteredJobs.length} 个岗位`);
+      }
+    } catch (error) {
+      console.warn('⚠️ 预分类表筛选失败，回退到传统筛选:', error);
+    }
     
-    // 更新筛选后的岗位ID列表
-    filterState.filteredJobIds = filteredJobs.map(job => job.id);
+    // 如果预分类表没有结果，使用传统筛选方法
+    if (!usedOptimizedFilter || filteredJobs.length === 0) {
+      // 获取当前筛选范围的岗位
+      const currentJobs = filterState.allJobs.filter(job => 
+        filterState.filteredJobIds.includes(job.id)
+      );
+      
+      // 执行传统筛选
+      filteredJobs = filterJobs(currentJobs, filterState.filters, step);
+      
+      // 更新筛选后的岗位ID列表
+      filterState.filteredJobIds = filteredJobs.map(job => job.id);
+    }
+    
     filterState.lastUpdated = Date.now();
     
     // 保存更新后的状态
