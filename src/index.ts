@@ -593,6 +593,11 @@ function createApp() {
   let isAIAskingExpectations = false  // AI是否正在询问职业期望问题
   let jsonProcessingMessage: HTMLElement | null = null  // 保存"正在分析中……"消息元素的引用
   
+  // 渐进式筛选状态
+  let progressiveFilterSessionId: string | null = null  // 渐进式筛选会话ID
+  let progressiveFilterInitialized = false  // 是否已初始化渐进式筛选
+  let progressiveFilterCounts: number[] = []  // 每步筛选后的岗位数量
+  
   // 更新左侧卡片显示画像数据（提前定义，供 clearAllResumeData 使用）
   function updateProfileCard(profile: {
     resumeScore?: any
@@ -1191,9 +1196,176 @@ function createApp() {
     return div.innerHTML
   }
 
+  // ========== 渐进式筛选相关函数 ==========
+  
+  // 初始化渐进式筛选
+  async function initProgressiveFilter() {
+    try {
+      // 生成唯一的会话ID
+      progressiveFilterSessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9)
+      
+      console.log('初始化渐进式筛选，sessionId:', progressiveFilterSessionId)
+      
+      const response = await fetch('/api/progressive-filter/init', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: progressiveFilterSessionId })
+      })
+      
+      const result = await response.json()
+      if (result.success) {
+        progressiveFilterInitialized = true
+        progressiveFilterCounts = [result.totalJobs]
+        console.log('渐进式筛选初始化成功，岗位总数:', result.totalJobs)
+      } else {
+        console.error('渐进式筛选初始化失败:', result.error)
+      }
+    } catch (error) {
+      console.error('初始化渐进式筛选出错:', error)
+    }
+  }
+  
+  // 执行一步筛选
+  async function executeProgressiveFilterStep(step: number, answer: string) {
+    if (!progressiveFilterSessionId || !progressiveFilterInitialized) {
+      console.log('渐进式筛选未初始化，跳过')
+      return
+    }
+    
+    try {
+      console.log(`执行渐进式筛选第${step}步，回答:`, answer)
+      
+      const response = await fetch('/api/progressive-filter/step', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: progressiveFilterSessionId,
+          step: step,
+          answer: answer
+        })
+      })
+      
+      const result = await response.json()
+      if (result.success) {
+        progressiveFilterCounts.push(result.remainingCount)
+        console.log(`第${step}步筛选完成，剩余岗位:`, result.remainingCount)
+        
+        // 可以在UI上显示筛选进度
+        showFilterProgress(step, result.remainingCount, result.totalCount, result.sampleJobs)
+      } else {
+        console.error(`第${step}步筛选失败:`, result.error)
+      }
+    } catch (error) {
+      console.error(`执行第${step}步筛选出错:`, error)
+    }
+  }
+  
+  // 显示筛选进度（在左侧卡片区域）
+  function showFilterProgress(step: number, remaining: number, total: number, sampleJobs: any[]) {
+    const cardsPanel = document.getElementById('cards-panel')
+    if (!cardsPanel) return
+    
+    // 计算进度百分比
+    const percentage = Math.round((remaining / total) * 100)
+    
+    let sampleHtml = ''
+    if (sampleJobs && sampleJobs.length > 0) {
+      sampleHtml = `
+        <div class="mt-4">
+          <h4 class="text-sm font-medium text-gray-700 mb-2">示例岗位：</h4>
+          <div class="space-y-2">
+            ${sampleJobs.map((job: any) => `
+              <div class="bg-gray-50 rounded-lg p-3">
+                <div class="font-medium text-gray-800">${job.title || '未知岗位'}</div>
+                <div class="text-sm text-gray-500">${job.company || '未知公司'} · ${job.location || '未知地点'}</div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `
+    }
+    
+    // 更新左侧卡片，显示筛选进度
+    cardsPanel.innerHTML = `
+      <div class="h-full flex flex-col">
+        <div class="hidden lg:flex items-center px-4 py-3">
+          <h2 class="text-xl font-semibold text-gray-700">岗位筛选进度</h2>
+        </div>
+        <div class="flex-1 overflow-auto p-4 lg:p-6">
+          <div class="max-w-md mx-auto">
+            <div class="bg-white rounded-xl p-6 shadow-lg">
+              <div class="text-center mb-6">
+                <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center">
+                  <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                  </svg>
+                </div>
+                <h3 class="text-lg font-semibold text-gray-800">正在筛选岗位</h3>
+                <p class="text-gray-500 text-sm mt-1">第 ${step}/5 步</p>
+              </div>
+              
+              <div class="space-y-4">
+                <div class="flex justify-between items-center">
+                  <span class="text-sm font-medium text-gray-700">剩余岗位</span>
+                  <span class="text-sm font-bold text-blue-600">${remaining} / ${total}</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                  <div class="h-full bg-gradient-to-r from-blue-400 to-blue-600 rounded-full transition-all duration-500" style="width: ${percentage}%"></div>
+                </div>
+                <p class="text-xs text-gray-500 text-center">已筛选掉 ${total - remaining} 个不符合条件的岗位</p>
+              </div>
+              
+              ${sampleHtml}
+            </div>
+          </div>
+        </div>
+      </div>
+    `
+  }
+  
+  // 获取最终筛选结果
+  async function getFinalFilteredJobs() {
+    if (!progressiveFilterSessionId) {
+      return null
+    }
+    
+    try {
+      console.log('获取最终筛选结果')
+      
+      const studentProfile = JSON.parse(localStorage.getItem('studentProfile') || '{}')
+      
+      const response = await fetch('/api/progressive-filter/final', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: progressiveFilterSessionId,
+          profile: studentProfile
+        })
+      })
+      
+      const result = await response.json()
+      if (result.success) {
+        console.log('获取最终筛选结果成功，岗位数:', result.totalCount)
+        return result
+      } else {
+        console.error('获取最终筛选结果失败:', result.error)
+        return null
+      }
+    } catch (error) {
+      console.error('获取最终筛选结果出错:', error)
+      return null
+    }
+  }
+  
   // ========== 从对话历史提取职业期望并调用岗位匹配 ==========
   async function extractAndCallJobMatch() {
     console.log('开始从对话历史提取职业期望...')
+    
+    // 首先尝试获取渐进式筛选的结果
+    let filterResult = null
+    if (progressiveFilterSessionId && progressiveFilterInitialized) {
+      filterResult = await getFinalFilteredJobs()
+    }
     
     // 从对话历史中提取用户消息（跳过系统消息，只取用户回答）
     const userMessages = conversationHistory
@@ -1203,7 +1375,6 @@ function createApp() {
     console.log('找到用户消息数量:', userMessages.length)
     
     // 假设用户最后5个消息是对职业期望问题的回答
-    // 实际上需要更智能的判断，但先简单处理
     const recentAnswers = userMessages.slice(-5)
     console.log('提取的回答:', recentAnswers)
     
@@ -1222,7 +1393,11 @@ function createApp() {
     // 只有当我们有至少一些回答时才调用
     if (Object.keys(expectations).length > 0) {
       // 显示正在匹配的消息
-      const aiMessageDiv = addMessage('正在为您匹配岗位……', false)
+      let matchMessage = '正在为您匹配岗位……'
+      if (filterResult) {
+        matchMessage = `正在为您匹配岗位（已筛选出 ${filterResult.totalCount} 个候选岗位）……`
+      }
+      const aiMessageDiv = addMessage(matchMessage, false)
       const aiTextElement = aiMessageDiv?.querySelector('.ai-message') as HTMLElement
       
       // 隐藏发送按钮，显示停止按钮
@@ -1239,25 +1414,35 @@ function createApp() {
         // 先从 localStorage 获取学生画像
         const studentProfile = JSON.parse(localStorage.getItem('studentProfile') || '{}')
         
-        // 构建匹配请求
-        const matchRequest = {
-          expectations: expectations,
-          profile: studentProfile
+        // 如果有渐进式筛选结果，直接用这些岗位进行AI匹配
+        let result: any = null
+        if (filterResult && filterResult.jobs && filterResult.jobs.length > 0) {
+          console.log('使用渐进式筛选结果进行AI匹配，岗位数:', filterResult.jobs.length)
+          
+          // 对筛选出的岗位进行AI匹配度打分
+          result = await performAIMatching(filterResult.jobs, studentProfile, filterResult.message)
+        } else {
+          console.log('使用传统岗位匹配API')
+          // 如果没有渐进式筛选结果，回退到传统方式
+          const matchRequest = {
+            expectations: expectations,
+            profile: studentProfile
+          }
+          
+          const response = await fetch('/api/job-match', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(matchRequest)
+          })
+          
+          if (!response.ok) {
+            throw new Error('匹配分析请求失败')
+          }
+          
+          result = await response.json()
         }
         
-        console.log('调用岗位匹配API...')
-        const response = await fetch('/api/job-match', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(matchRequest)
-        })
-        
-        if (!response.ok) {
-          throw new Error('匹配分析请求失败')
-        }
-        
-        const result = await response.json()
-        console.log('岗位匹配API返回:', result.success ? '成功' : '失败')
+        console.log('岗位匹配返回:', result.success ? '成功' : '失败')
         
         // 保存匹配分析结果到 localStorage
         if (result.analysis) {
@@ -1286,6 +1471,11 @@ function createApp() {
         isGenerating = false
         isAIAskingExpectations = false
         
+        // 清理渐进式筛选状态
+        progressiveFilterSessionId = null
+        progressiveFilterInitialized = false
+        progressiveFilterCounts = []
+        
         // 恢复发送按钮，隐藏停止按钮
         if (sendBtn) {
           sendBtn.classList.remove('hidden')
@@ -1299,6 +1489,201 @@ function createApp() {
     } else {
       console.log('没有提取到足够的职业期望回答')
     }
+  }
+  
+  // 对筛选出的岗位进行AI匹配度打分
+  async function performAIMatching(jobs: any[], profile: any, baseMessage: string) {
+    console.log('开始AI匹配度打分，岗位数:', jobs.length)
+    
+    // 调用AI进行匹配度分析
+    let matchAnalysis = null
+    if (jobs.length > 0) {
+      // 构建AI分析提示词
+      const jobsForAnalysis = jobs.slice(0, 50) // 最多取50个岗位给AI分析
+      const jobsSummary = jobsForAnalysis.map((job: any, idx: number) => `
+岗位${idx + 1}:
+- 岗位名称: ${job.title}
+- 公司: ${job.company}
+- 薪资: ${job.salary}
+- 地点: ${job.location}
+- 行业: ${job.industry}
+- 描述: ${job.description?.substring(0, 200) || '无'}
+`).join('\n')
+      
+      const profileSummary = JSON.stringify(profile, null, 2)
+      
+      const analysisPrompt = `请进行人岗匹配度分析，严格按照以下要求输出：
+
+【学生画像】
+${profileSummary}
+
+【匹配岗位】
+${jobsSummary}
+
+【输出要求 - 必须严格遵守】
+1. 只输出JSON格式的匹配分析结果 + 一句友好提示语
+2. **严禁**输出任何表格、Markdown格式的岗位列表
+3. **严禁**输出"### 岗位匹配结果"、"| 岗位名称 |..."这类内容
+4. **严禁**输出任何额外的解释说明文字
+
+请为每个岗位从以下四个维度进行详细分析和打分：
+
+## 评分原则 - 请仔细阅读
+1. **鼓励为主**：即使不是100%完美匹配，只要有相关经验和技能，就给予较高分数
+2. **看重潜力**：应届生或经验较少的候选人，看重学习能力和潜力
+3. **相关即可**：技能和经验相关即可，不需要完全一致
+4. **转移价值**：过往经验即使不是完全匹配，也有转移价值
+
+## 评分维度说明
+1. **基础要求匹配** (权重自适应): 学历、专业、工作年限等岗位硬性要求
+   - 学历相近、专业相关即可给高分
+   - 工作经验不足但有相关实习/项目经验也给高分
+2. **职业技能匹配** (权重自适应): 技术栈、工具、证书等专业技能
+   - 技能相关即可，不需要完全一致
+   - 有同类工具使用经验可给高分
+3. **职业素养匹配** (权重自适应): 沟通能力、抗压能力、团队协作等软技能
+   - 从简历描述中推断，只要有相关经历就给高分
+4. **发展潜力匹配** (权重自适应): 学习能力、创新能力、领导力等发展潜力
+   - 应届生这一项权重可以提高，看重学习能力和潜力
+
+## 权重自适应规则
+- 如果岗位对技术要求高，职业技能匹配权重增加
+- 如果岗位对经验要求高，基础要求匹配权重增加
+- 如果岗位是管理岗，职业素养和发展潜力权重增加
+- 如果是应届生或经验较少，发展潜力权重增加
+- 四个维度权重总和必须为100%
+
+## 打分标准（0-100分）
+每个维度单独打分，然后计算加权总分。
+- 80-100分：非常匹配，强烈推荐
+- 60-79分：比较匹配，可以推荐
+- 40-59分：一般匹配，需要考量
+- 0-39分：不太匹配
+
+**注意**：这是通过渐进式筛选出的岗位，请尽量给合理的分数，鼓励用户！
+
+## 输出格式要求
+请使用JSON格式输出，格式如下：
+\`\`\`json
+{
+  "matches": [
+    {
+      "job_title": "岗位名称",
+      "company": "公司名",
+      "salary": "薪资",
+      "location": "地点",
+      "industry": "行业",
+      "overall_score": 85,
+      "match_percentage": "85%",
+      "dimensions": {
+        "basic_requirements": {
+          "score": 80,
+          "weight": 25,
+          "analysis": "基础要求分析...",
+          "strengths": ["优势1", "优势2"],
+          "gaps": ["差距1", "差距2"]
+        },
+        "professional_skills": {
+          "score": 90,
+          "weight": 35,
+          "analysis": "职业技能分析...",
+          "strengths": ["优势1", "优势2"],
+          "gaps": ["差距1", "差距2"]
+        },
+        "professional_quality": {
+          "score": 85,
+          "weight": 20,
+          "analysis": "职业素养分析...",
+          "strengths": ["优势1", "优势2"],
+          "gaps": ["差距1", "差距2"]
+        },
+        "development_potential": {
+          "score": 88,
+          "weight": 20,
+          "analysis": "发展潜力分析...",
+          "strengths": ["优势1", "优势2"],
+          "gaps": ["差距1", "差距2"]
+        }
+      },
+      "key_strengths": ["核心优势1", "核心优势2", "核心优势3"],
+      "key_gaps": ["关键差距1", "关键差距2"],
+      "suggestions": "改进建议..."
+    }
+  ]
+}
+\`\`\`
+
+注意：
+- 每个维度必须包含 strengths（优势项）和 gaps（差距项）
+- key_gaps 中的差距项需要在前端高亮显示
+- 权重必须根据岗位特点自适应调整
+- overall_score 是加权总分：(basic_score×basic_weight + skill_score×skill_weight + quality_score×quality_weight + potential_score×potential_weight) / 100
+- **不要输出任何友好提示语，只输出JSON代码块**
+`;
+      
+      try {
+        const chatResponse = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: [{ role: 'user', content: analysisPrompt }]
+          })
+        });
+        
+        if (chatResponse.ok) {
+          const reader = chatResponse.body?.getReader();
+          const decoder = new TextDecoder();
+          let aiResponse = '';
+          
+          if (reader) {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              
+              const chunk = decoder.decode(value);
+              const lines = chunk.split('\n');
+              
+              for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                  const data = line.slice(6);
+                  if (data === '[DONE]') break;
+                  
+                  try {
+                    const parsed = JSON.parse(data);
+                    if (parsed.content) {
+                      aiResponse += parsed.content;
+                    }
+                  } catch {
+                    // 忽略解析错误
+                  }
+                }
+              }
+            }
+          }
+          
+          // 提取JSON分析结果
+          const jsonMatch = aiResponse.match(/```json\s*([\s\S]*?)```/);
+          if (jsonMatch) {
+            try {
+              matchAnalysis = JSON.parse(jsonMatch[1]);
+              console.log('AI匹配分析完成:', Object.keys(matchAnalysis));
+            } catch {
+              console.error('解析匹配分析JSON失败');
+            }
+          }
+        }
+      } catch (aiError) {
+        console.error('AI分析失败:', aiError);
+      }
+    }
+    
+    // 返回结果
+    return {
+      success: true,
+      message: baseMessage || '岗位匹配分析已完成，请查看左侧卡片！',
+      analysis: matchAnalysis,
+      jobs: jobs
+    };
   }
   // ============================================================
 
@@ -1341,8 +1726,41 @@ function createApp() {
       filePreview?.classList.remove('flex')
     }
 
-    // 禁用前端职业期望收集，让AI来处理
     // 如果正在收集职业期望，先处理用户回答
+    if (isAIAskingExpectations && message) {
+      // 保存用户回答
+      const questionKeys: Array<keyof CareerExpectations> = ['industry', 'jobType', 'city', 'salary', 'other']
+      if (currentExpectationQuestion < questionKeys.length) {
+        careerExpectations[questionKeys[currentExpectationQuestion]] = message.trim()
+        
+        // 调用渐进式筛选（每回答一个问题就筛选一次）
+        if (progressiveFilterSessionId && progressiveFilterInitialized) {
+          console.log(`回答第${currentExpectationQuestion + 1}个问题，开始渐进式筛选`)
+          await executeProgressiveFilterStep(currentExpectationQuestion + 1, message.trim())
+        }
+        
+        // 增加问题计数
+        currentExpectationQuestion++
+      }
+      
+      // 添加用户消息到界面
+      addMessage(message, true)
+      messageInput.value = ''
+      
+      // 这里不需要做其他处理，直接返回，让AI继续对话
+      // 重置 isGenerating 标志
+      isGenerating = false
+      
+      // 恢复发送按钮
+      if (sendBtn) {
+        sendBtn.style.opacity = '1'
+        sendBtn.style.pointerEvents = 'auto'
+      }
+      
+      return
+    }
+    
+    // 旧的前端职业期望收集逻辑（已禁用）
     if (false && isCollectingExpectations && message) {
       // 立即重置 isGenerating 标志，因为不调用后端API
       isGenerating = false
@@ -1884,10 +2302,13 @@ function createApp() {
         // 检测AI是否开始问职业期望问题
         if (finalContentToSave.includes('期望从事的行业') || 
             finalContentToSave.includes('职业期望')) {
-          console.log('AI开始询问职业期望问题')
+          console.log('AI开始询问职业期望问题，初始化渐进式筛选')
           isAIAskingExpectations = true
           currentExpectationQuestion = 0
           careerExpectations = {}
+          
+          // 初始化渐进式筛选
+          initProgressiveFilter()
         }
         
         // 检测AI是否完成所有问题（说感谢的话）
