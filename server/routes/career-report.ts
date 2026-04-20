@@ -938,7 +938,9 @@ async function generatePDFReport(reportData: any): Promise<Buffer> {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      doc.registerFont('ChineseFont', '/usr/share/fonts/truetype/wqy/wqy-microhei.ttc');
+      // 使用 pdfkit 内置字体（注意：内置字体不支持中文显示）
+      // 如需中文支持，请确保系统安装了有效的 .ttf 中文字体
+      const fontName = 'Helvetica';
 
       function addSectionTitle(text: string) {
         doc.moveDown(0.8)
@@ -966,7 +968,7 @@ async function generatePDFReport(reportData: any): Promise<Buffer> {
       const pageWidth = doc.page.width - 120;
 
       // 封面
-      doc.font('ChineseFont');
+      doc.font(fontName);
       doc.fontSize(28).fillColor('#2c3e50').text('职业规划报告', { align: 'center' }).moveDown(0.5);
       doc.fontSize(14).fillColor('#7f8c8d').text('Comprehensive Career Development Report', { align: 'center' }).moveDown(1.5);
 
@@ -988,7 +990,7 @@ async function generatePDFReport(reportData: any): Promise<Buffer> {
       // 匹配度总览
       const boxY = doc.y;
       doc.rect(60, boxY, pageWidth, 50).fill('#ecf0f1').stroke();
-      doc.fontSize(13).fillColor('#2c3e50').font('ChineseFont')
+      doc.fontSize(13).fillColor('#2c3e50').font(fontName)
          .text(`综合匹配度: ${reportData.module1?.jobMatchAnalysis?.overallMatchScore || 0}/100`, 80, boxY + 10, { width: pageWidth - 40 })
          .text(`评级: ${reportData.module1?.jobMatchAnalysis?.overallGrade || 'B'}级 | 定位: ${reportData.module1?.jobMatchAnalysis?.marketPositioning || ''}`, 80, boxY + 28, { width: pageWidth - 40 });
       doc.y = boxY + 60;
@@ -1000,7 +1002,7 @@ async function generatePDFReport(reportData: any): Promise<Buffer> {
       const rowHeight = 22;
 
       doc.rect(60, tableTop, pageWidth, rowHeight).fill('#3498db');
-      doc.fillColor('#ffffff').fontSize(10).font('ChineseFont');
+      doc.fillColor('#ffffff').fontSize(10).font(fontName);
       doc.text('维度', 65, tableTop + 6, { width: colWidths[0] - 10 });
       doc.text('当前水平', 65 + colWidths[0], tableTop + 6, { width: colWidths[1] - 10 });
       doc.text('岗位要求', 65 + colWidths[0] + colWidths[1], tableTop + 6, { width: colWidths[2] - 10 });
@@ -1011,7 +1013,7 @@ async function generatePDFReport(reportData: any): Promise<Buffer> {
       gaps.forEach((gap: any, idx: number) => {
         const rowY = tableTop + rowHeight * (idx + 1);
         doc.rect(60, rowY, pageWidth, rowHeight).fill(idx % 2 === 0 ? '#f8f9fa' : '#ffffff').stroke('#dee2e6');
-        doc.fillColor('#333333').fontSize(9).font('ChineseFont');
+        doc.fillColor('#333333').fontSize(9).font(fontName);
         doc.text(gap.dimension, 65, rowY + 6, { width: colWidths[0] - 10 });
         doc.text(`${gap.current}%`, 65 + colWidths[0], rowY + 6, { width: colWidths[1] - 10 });
         doc.text(`${gap.required}%`, 65 + colWidths[0] + colWidths[1], rowY + 6, { width: colWidths[2] - 10 });
@@ -1042,7 +1044,7 @@ async function generatePDFReport(reportData: any): Promise<Buffer> {
       (reportData.module2?.careerPath || []).forEach((path: any) => {
         const pathBoxY = doc.y;
         doc.rect(60, pathBoxY, pageWidth, 45).fill('#f8fafc').stroke('#e5e7eb');
-        doc.fillColor('#2c3e50').fontSize(11).font('ChineseFont')
+        doc.fillColor('#2c3e50').fontSize(11).font(fontName)
            .text(`${path.level}. ${path.title}`, 75, pathBoxY + 8, { width: pageWidth - 30 })
            .fontSize(9).fillColor('#7f8c8d')
            .text(`${path.years} | ${path.salary}`, 75, pathBoxY + 26, { width: pageWidth - 30 });
@@ -1128,18 +1130,42 @@ function createInfoTable(studentInfo: any): Table {
     rows: [
       new TableRow({
         children: [
-          new TableCell({ children: [new TextRun({ text: '姓名', bold: true })], width: { size: 25, type: WidthType.PERCENTAGE } }),
-          new TableCell({ children: [new TextRun({ text: studentInfo?.name || '未知' })], width: { size: 25, type: WidthType.PERCENTAGE } }),
-          new TableCell({ children: [new TextRun({ text: '学历', bold: true })], width: { size: 25, type: WidthType.PERCENTAGE } }),
-          new TableCell({ children: [new TextRun({ text: studentInfo?.education || '未知' })], width: { size: 25, type: WidthType.PERCENTAGE } }),
+          new TableCell({ 
+            children: [new Paragraph({ children: [new TextRun({ text: '姓名', bold: true })] })], 
+            width: { size: 25, type: WidthType.PERCENTAGE } 
+          }),
+          new TableCell({ 
+            children: [new Paragraph({ children: [new TextRun({ text: studentInfo?.name || '未知' })] })], 
+            width: { size: 25, type: WidthType.PERCENTAGE } 
+          }),
+          new TableCell({ 
+            children: [new Paragraph({ children: [new TextRun({ text: '学历', bold: true })] })], 
+            width: { size: 25, type: WidthType.PERCENTAGE } 
+          }),
+          new TableCell({ 
+            children: [new Paragraph({ children: [new TextRun({ text: studentInfo?.education || '未知' })] })], 
+            width: { size: 25, type: WidthType.PERCENTAGE } 
+          }),
         ],
       }),
       new TableRow({
         children: [
-          new TableCell({ children: [new TextRun({ text: '专业', bold: true })] }),
-          new TableCell({ children: [new TextRun({ text: studentInfo?.major || '未知' })] }),
-          new TableCell({ children: [new TextRun({ text: '学校', bold: true })] }),
-          new TableCell({ children: [new TextRun({ text: studentInfo?.school || '未知' })] }),
+          new TableCell({ 
+            children: [new Paragraph({ children: [new TextRun({ text: '专业', bold: true })] })], 
+            width: { size: 25, type: WidthType.PERCENTAGE } 
+          }),
+          new TableCell({ 
+            children: [new Paragraph({ children: [new TextRun({ text: studentInfo?.major || '未知' })] })], 
+            width: { size: 25, type: WidthType.PERCENTAGE } 
+          }),
+          new TableCell({ 
+            children: [new Paragraph({ children: [new TextRun({ text: '学校', bold: true })] })], 
+            width: { size: 25, type: WidthType.PERCENTAGE } 
+          }),
+          new TableCell({ 
+            children: [new Paragraph({ children: [new TextRun({ text: studentInfo?.school || '未知' })] })], 
+            width: { size: 25, type: WidthType.PERCENTAGE } 
+          }),
         ],
       }),
     ],
