@@ -60,9 +60,6 @@ let supabase: ReturnType<typeof createClient> | null = null;
 function getSupabaseClient() {
   if (!supabase && supabaseUrl && supabaseKey) {
     supabase = createClient(supabaseUrl, supabaseKey, {
-      db: {
-        schema: 'public'
-      },
       global: {
         headers: {
           'Content-Type': 'application/json'

@@ -4,259 +4,6 @@ import { execSync } from 'child_process';
 
 const router = Router();
 
-// 生成晋升路径（三级以上）
-function generatePromotionPaths(job: any) {
-  const jobTitle = job.title || job.job_title || '';
-  const industry = job.industry || '';
-  
-  // 根据岗位类型和行业生成晋升路径
-  const paths: Array<{
-    level: number;
-    title: string;
-    description: string;
-    typical_years: string;
-  }> = [];
-  
-  // 基础岗位
-  paths.push({
-    level: 1,
-    title: jobTitle,
-    description: '当前岗位，负责具体执行工作',
-    typical_years: '1-2年'
-  });
-  
-  // 根据不同岗位类型生成不同的晋升路径
-  if (jobTitle.includes('工程师') || jobTitle.includes('开发') || jobTitle.includes('技术')) {
-    paths.push({
-      level: 2,
-      title: '高级' + jobTitle,
-      description: '负责复杂模块开发，指导初级工程师',
-      typical_years: '2-4年'
-    });
-    paths.push({
-      level: 3,
-      title: '技术主管/架构师',
-      description: '负责技术架构设计，带领技术团队',
-      typical_years: '5-8年'
-    });
-    paths.push({
-      level: 4,
-      title: '技术总监/CTO',
-      description: '负责公司技术战略和技术团队管理',
-      typical_years: '8年以上'
-    });
-  } else if (jobTitle.includes('产品') || jobTitle.includes('经理')) {
-    paths.push({
-      level: 2,
-      title: '高级' + jobTitle,
-      description: '负责复杂产品模块，指导初级产品经理',
-      typical_years: '2-4年'
-    });
-    paths.push({
-      level: 3,
-      title: '产品负责人/产品总监',
-      description: '负责产品路线图规划，带领产品团队',
-      typical_years: '5-8年'
-    });
-    paths.push({
-      level: 4,
-      title: '产品VP/CEO',
-      description: '负责公司产品战略和业务发展',
-      typical_years: '8年以上'
-    });
-  } else if (jobTitle.includes('运营') || jobTitle.includes('市场')) {
-    paths.push({
-      level: 2,
-      title: '高级' + jobTitle,
-      description: '负责大型活动和项目，指导初级专员',
-      typical_years: '2-4年'
-    });
-    paths.push({
-      level: 3,
-      title: '运营/市场负责人',
-      description: '负责运营/市场策略制定，带领团队',
-      typical_years: '5-8年'
-    });
-    paths.push({
-      level: 4,
-      title: '运营/市场总监',
-      description: '负责公司运营/市场战略和业务增长',
-      typical_years: '8年以上'
-    });
-  } else if (jobTitle.includes('设计') || jobTitle.includes('UI') || jobTitle.includes('UX')) {
-    paths.push({
-      level: 2,
-      title: '高级' + jobTitle,
-      description: '负责复杂设计项目，指导初级设计师',
-      typical_years: '2-4年'
-    });
-    paths.push({
-      level: 3,
-      title: '设计负责人/设计主管',
-      description: '负责设计系统建设，带领设计团队',
-      typical_years: '5-8年'
-    });
-    paths.push({
-      level: 4,
-      title: '设计总监',
-      description: '负责公司设计战略和设计文化建设',
-      typical_years: '8年以上'
-    });
-  } else {
-    // 通用晋升路径
-    paths.push({
-      level: 2,
-      title: '高级' + jobTitle,
-      description: '承担更复杂的工作职责，指导新人',
-      typical_years: '2-4年'
-    });
-    paths.push({
-      level: 3,
-      title: '团队主管',
-      description: '负责团队管理和业务规划',
-      typical_years: '5-8年'
-    });
-    paths.push({
-      level: 4,
-      title: '部门经理/总监',
-      description: '负责部门战略和团队发展',
-      typical_years: '8年以上'
-    });
-  }
-  
-  return paths;
-}
-
-// 生成横向换岗路径（每个岗位不少于2条）
-function generateLateralMoves(job: any) {
-  const jobTitle = job.title || job.job_title || '';
-  const industry = job.industry || '';
-  
-  const moves: Array<{
-    target_title: string;
-    target_industry: string;
-    description: string;
-    transferable_skills: string[];
-    suggested_actions: string[];
-  }> = [];
-  
-  // 根据当前岗位生成相关的横向换岗路径
-  if (jobTitle.includes('工程师') || jobTitle.includes('开发') || jobTitle.includes('技术')) {
-    moves.push({
-      target_title: '产品经理',
-      target_industry: industry || '互联网',
-      description: '从技术实现转向产品规划，将技术思维应用于产品设计',
-      transferable_skills: ['逻辑思维', '用户需求理解', '项目管理', '技术评估'],
-      suggested_actions: ['学习产品方法论', '多参与产品评审', '培养商业敏感度']
-    });
-    moves.push({
-      target_title: '技术支持/解决方案工程师',
-      target_industry: industry || '互联网',
-      description: '从开发转向客户技术支持，帮助客户解决技术问题',
-      transferable_skills: ['技术能力', '问题排查', '沟通能力', '客户服务'],
-      suggested_actions: ['提升沟通技巧', '学习产品知识', '培养客户思维']
-    });
-    moves.push({
-      target_title: '技术培训师/技术布道师',
-      target_industry: '教育/互联网',
-      description: '分享技术知识，培养更多技术人才',
-      transferable_skills: ['技术能力', '表达能力', '教学能力', '内容创作'],
-      suggested_actions: ['开始写技术博客', '参与技术分享', '提升演讲能力']
-    });
-  } else if (jobTitle.includes('产品')) {
-    moves.push({
-      target_title: '运营经理',
-      target_industry: industry || '互联网',
-      description: '从产品规划转向产品运营，将产品理念落地',
-      transferable_skills: ['用户理解', '数据分析', '项目协调', '产品思维'],
-      suggested_actions: ['学习运营方法论', '关注数据指标', '培养活动策划能力']
-    });
-    moves.push({
-      target_title: '用户研究/UX研究员',
-      target_industry: industry || '互联网',
-      description: '深入研究用户行为和需求，为产品提供决策依据',
-      transferable_skills: ['用户思维', '数据分析', '洞察力', '同理心'],
-      suggested_actions: ['学习用户研究方法', '多做用户访谈', '培养分析能力']
-    });
-    moves.push({
-      target_title: '项目经理',
-      target_industry: industry || '互联网',
-      description: '从产品规划转向项目管理，协调资源推动项目落地',
-      transferable_skills: ['项目规划', '沟通协调', '风险管理', '资源整合'],
-      suggested_actions: ['学习PMP等项目管理方法', '提升组织协调能力', '培养风险意识']
-    });
-  } else if (jobTitle.includes('运营') || jobTitle.includes('市场')) {
-    moves.push({
-      target_title: '产品经理',
-      target_industry: industry || '互联网',
-      description: '从用户运营转向产品规划，将用户洞察转化为产品功能',
-      transferable_skills: ['用户洞察', '数据分析', '活动策划', '用户思维'],
-      suggested_actions: ['学习产品方法论', '多参与产品讨论', '培养产品思维']
-    });
-    moves.push({
-      target_title: '内容运营/内容营销',
-      target_industry: industry || '互联网',
-      description: '专注于内容创作和内容策略，通过内容连接用户',
-      transferable_skills: ['文案能力', '内容敏感度', '用户理解', '营销思维'],
-      suggested_actions: ['提升写作能力', '研究内容策略', '培养内容敏感度']
-    });
-    moves.push({
-      target_title: '品牌营销',
-      target_industry: industry || '互联网',
-      description: '从效果营销转向品牌建设，提升公司品牌影响力',
-      transferable_skills: ['营销思维', '创意能力', '市场洞察', '传播能力'],
-      suggested_actions: ['学习品牌理论', '关注品牌案例', '培养创意思维']
-    });
-  } else if (jobTitle.includes('设计')) {
-    moves.push({
-      target_title: '产品经理',
-      target_industry: industry || '互联网',
-      description: '从视觉设计转向产品规划，将设计思维应用于产品决策',
-      transferable_skills: ['用户体验思维', '视觉敏感度', '同理心', '细节把控'],
-      suggested_actions: ['学习产品方法论', '培养商业思维', '提升产品感']
-    });
-    moves.push({
-      target_title: '设计管理/设计总监',
-      target_industry: industry || '互联网',
-      description: '从执行设计转向设计管理，带领设计团队成长',
-      transferable_skills: ['设计能力', '审美品味', '团队管理', '设计系统思维'],
-      suggested_actions: ['培养管理能力', '建立设计系统', '提升团队领导力']
-    });
-    moves.push({
-      target_title: '用户体验研究员',
-      target_industry: industry || '互联网',
-      description: '从视觉设计转向用户研究，深入理解用户需求',
-      transferable_skills: ['用户思维', '同理心', '观察力', '分析能力'],
-      suggested_actions: ['学习用户研究方法', '多做用户访谈', '培养分析思维']
-    });
-  } else {
-    // 通用横向换岗路径
-    moves.push({
-      target_title: '项目经理',
-      target_industry: industry || '互联网',
-      description: '从业务执行转向项目管理，协调资源推动项目落地',
-      transferable_skills: ['业务理解', '沟通协调', '项目规划', '执行力'],
-      suggested_actions: ['学习项目管理方法', '提升组织协调能力', '培养风险意识']
-    });
-    moves.push({
-      target_title: '业务分析师',
-      target_industry: industry || '互联网',
-      description: '深入分析业务数据，为业务决策提供支持',
-      transferable_skills: ['业务理解', '数据分析', '逻辑思维', '洞察能力'],
-      suggested_actions: ['提升数据分析能力', '学习商业分析方法', '培养商业敏感度']
-    });
-    moves.push({
-      target_title: '培训师/企业教练',
-      target_industry: '教育/咨询',
-      description: '分享专业知识和经验，帮助他人成长',
-      transferable_skills: ['专业能力', '表达能力', '教学能力', '同理心'],
-      suggested_actions: ['提升表达能力', '开始分享经验', '培养教学思维']
-    });
-  }
-  
-  return moves;
-}
-
 // 加载环境变量
 function loadEnv(): void {
   try {
@@ -313,9 +60,6 @@ let supabase: ReturnType<typeof createClient> | null = null;
 function getSupabaseClient() {
   if (!supabase && supabaseUrl && supabaseKey) {
     supabase = createClient(supabaseUrl, supabaseKey, {
-      db: {
-        schema: 'public'
-      },
       global: {
         headers: {
           'Content-Type': 'application/json'
@@ -329,6 +73,392 @@ function getSupabaseClient() {
     });
   }
   return supabase;
+}
+
+// 岗位画像缓存
+let jobProfilesCache: any[] = [];
+let jobProfilesLoaded = false;
+
+// 加载所有岗位画像
+async function loadJobProfiles() {
+  if (jobProfilesLoaded) return jobProfilesCache;
+  
+  const db = getSupabaseClient();
+  if (!db) return [];
+  
+  try {
+    const { data, error } = await db
+      .from('job_profiles')
+      .select('*');
+    
+    if (error) {
+      console.error('加载岗位画像失败:', error);
+      return [];
+    }
+    
+    jobProfilesCache = data || [];
+    jobProfilesLoaded = true;
+    console.log(`已加载 ${jobProfilesCache.length} 个岗位画像`);
+    return jobProfilesCache;
+  } catch (error) {
+    console.error('加载岗位画像出错:', error);
+    return [];
+  }
+}
+
+// 根据岗位名称匹配岗位画像
+function matchJobProfile(jobTitle: string, jobProfiles: any[]): any | null {
+  if (!jobTitle || jobProfiles.length === 0) return null;
+  
+  const normalizedTitle = jobTitle.toLowerCase();
+  
+  // 精确匹配
+  for (const profile of jobProfiles) {
+    if (profile.profile_name && profile.profile_name.toLowerCase() === normalizedTitle) {
+      return profile;
+    }
+  }
+  
+  // 关键词匹配
+  for (const profile of jobProfiles) {
+    if (profile.profile_name && normalizedTitle.includes(profile.profile_name.toLowerCase())) {
+      return profile;
+    }
+    if (profile.profile_name && profile.profile_name.toLowerCase().includes(normalizedTitle)) {
+      return profile;
+    }
+  }
+  
+  // 分类匹配
+  for (const profile of jobProfiles) {
+    if (profile.category === '技术类' && (normalizedTitle.includes('工程师') || normalizedTitle.includes('开发') || normalizedTitle.includes('技术'))) {
+      return profile;
+    }
+  }
+  
+  return null;
+}
+
+// 从数据库获取晋升路径
+async function getPromotionPathsFromDB(profileId: number): Promise<any[]> {
+  const db = getSupabaseClient();
+  if (!db) return [];
+  
+  try {
+    const { data, error } = await db
+      .from('career_paths')
+      .select(`
+        *,
+        from_job:job_profiles!from_job_id(id, profile_name),
+        to_job:job_profiles!to_job_id(id, profile_name)
+      `)
+      .eq('from_job_id', profileId)
+      .order('is_recommended', { ascending: false })
+      .order('years_required');
+    
+    if (error) {
+      console.error('获取晋升路径失败:', error);
+      return [];
+    }
+    
+    return data || [];
+  } catch (error) {
+    console.error('获取晋升路径出错:', error);
+    return [];
+  }
+}
+
+// 从数据库获取横向换岗路径
+async function getLateralMovesFromDB(profileId: number): Promise<any[]> {
+  const db = getSupabaseClient();
+  if (!db) return [];
+  
+  try {
+    const { data, error } = await db
+      .from('job_transfer_graph')
+      .select(`
+        *,
+        from_job:job_profiles!from_job_id(id, profile_name),
+        to_job:job_profiles!to_job_id(id, profile_name),
+        intermediate_job:job_profiles!intermediate_job_id(id, profile_name)
+      `)
+      .eq('from_job_id', profileId)
+      .order('is_recommended', { ascending: false })
+      .order('steps_required');
+    
+    if (error) {
+      console.error('获取横向换岗路径失败:', error);
+      return [];
+    }
+    
+    return data || [];
+  } catch (error) {
+    console.error('获取横向换岗路径出错:', error);
+    return [];
+  }
+}
+
+// 格式化晋升路径用于前端展示
+function formatPromotionPathsForDisplay(jobTitle: string, dbPaths: any[]): any[] {
+  if (dbPaths.length === 0) {
+    // 如果数据库没有数据，回退到生成模式
+    return generatePromotionPathsFallback(jobTitle);
+  }
+  
+  // 构建晋升路径层级
+  const paths: any[] = [];
+  
+  // 第一级：当前岗位
+  paths.push({
+    level: 1,
+    title: jobTitle,
+    description: '当前岗位，负责具体执行工作',
+    typical_years: '1-2年'
+  });
+  
+  // 从数据库路径中提取晋升路线
+  const verticalPaths = dbPaths.filter((p: any) => p.path_type === 'vertical');
+  
+  for (let i = 0; i < Math.min(verticalPaths.length, 3); i++) {
+    const path = verticalPaths[i];
+    paths.push({
+      level: i + 2,
+      title: path.to_job?.profile_name || `高级${jobTitle}`,
+      description: path.path_description || path.promotion_conditions || '承担更高级的工作职责',
+      typical_years: `${path.years_required || 2}-${path.years_required + 2 || 4}年`
+    });
+  }
+  
+  // 如果数据库路径不够3级，补充到4级
+  while (paths.length < 4) {
+    const level = paths.length + 1;
+    let title = '';
+    let desc = '';
+    
+    if (level === 2) {
+      title = `高级${jobTitle}`;
+      desc = '承担更复杂的工作职责，指导新人';
+    } else if (level === 3) {
+      title = '团队主管/负责人';
+      desc = '负责团队管理和业务规划';
+    } else {
+      title = '部门经理/总监';
+      desc = '负责部门战略和团队发展';
+    }
+    
+    paths.push({
+      level: level,
+      title: title,
+      description: desc,
+      typical_years: `${(level - 1) * 2}-${level * 2}年`
+    });
+  }
+  
+  return paths;
+}
+
+// 格式化横向换岗路径用于前端展示
+function formatLateralMovesForDisplay(jobTitle: string, dbPaths: any[]): any[] {
+  if (dbPaths.length === 0) {
+    // 如果数据库没有数据，回退到生成模式
+    return generateLateralMovesFallback(jobTitle);
+  }
+  
+  const moves: any[] = [];
+  
+  for (const path of dbPaths.slice(0, 3)) {
+    moves.push({
+      target_title: path.to_job?.profile_name || '相关岗位',
+      target_industry: '互联网',
+      description: path.transfer_tips || path.transfer_conditions || '从当前岗位转向相关领域',
+      transferable_skills: (path.additional_skills || '逻辑思维,沟通能力').split(',').map((s: string) => s.trim()).filter(Boolean),
+      suggested_actions: (path.additional_certificates || '学习相关技能,了解目标行业').split(',').map((s: string) => s.trim()).filter(Boolean)
+    });
+  }
+  
+  // 确保至少有2条路径
+  while (moves.length < 2) {
+    moves.push({
+      target_title: moves.length === 0 ? '产品经理' : '项目经理',
+      target_industry: '互联网',
+      description: '从当前岗位转向相关管理岗位',
+      transferable_skills: ['逻辑思维', '沟通能力', '项目协调'],
+      suggested_actions: ['学习相关方法论', '提升管理能力']
+    });
+  }
+  
+  return moves;
+}
+
+// 回退方案：生成晋升路径
+function generatePromotionPathsFallback(jobTitle: string) {
+  const paths: Array<{
+    level: number;
+    title: string;
+    description: string;
+    typical_years: string;
+  }> = [];
+  
+  paths.push({
+    level: 1,
+    title: jobTitle,
+    description: '当前岗位，负责具体执行工作',
+    typical_years: '1-2年'
+  });
+  
+  if (jobTitle.includes('工程师') || jobTitle.includes('开发') || jobTitle.includes('技术')) {
+    paths.push({
+      level: 2,
+      title: '高级' + jobTitle,
+      description: '负责复杂模块开发，指导初级工程师',
+      typical_years: '2-4年'
+    });
+    paths.push({
+      level: 3,
+      title: '技术主管/架构师',
+      description: '负责技术架构设计，带领技术团队',
+      typical_years: '5-8年'
+    });
+    paths.push({
+      level: 4,
+      title: '技术总监/CTO',
+      description: '负责公司技术战略和技术团队管理',
+      typical_years: '8年以上'
+    });
+  } else if (jobTitle.includes('产品') || jobTitle.includes('经理')) {
+    paths.push({
+      level: 2,
+      title: '高级' + jobTitle,
+      description: '负责复杂产品模块，指导初级产品经理',
+      typical_years: '2-4年'
+    });
+    paths.push({
+      level: 3,
+      title: '产品负责人/产品总监',
+      description: '负责产品路线图规划，带领产品团队',
+      typical_years: '5-8年'
+    });
+    paths.push({
+      level: 4,
+      title: '产品VP/CEO',
+      description: '负责公司产品战略和业务发展',
+      typical_years: '8年以上'
+    });
+  } else {
+    paths.push({
+      level: 2,
+      title: '高级' + jobTitle,
+      description: '承担更复杂的工作职责，指导新人',
+      typical_years: '2-4年'
+    });
+    paths.push({
+      level: 3,
+      title: '团队主管',
+      description: '负责团队管理和业务规划',
+      typical_years: '5-8年'
+    });
+    paths.push({
+      level: 4,
+      title: '部门经理/总监',
+      description: '负责部门战略和团队发展',
+      typical_years: '8年以上'
+    });
+  }
+  
+  return paths;
+}
+
+// 回退方案：生成横向换岗路径
+function generateLateralMovesFallback(jobTitle: string) {
+  const moves: Array<{
+    target_title: string;
+    target_industry: string;
+    description: string;
+    transferable_skills: string[];
+    suggested_actions: string[];
+  }> = [];
+  
+  if (jobTitle.includes('工程师') || jobTitle.includes('开发') || jobTitle.includes('技术')) {
+    moves.push({
+      target_title: '产品经理',
+      target_industry: '互联网',
+      description: '从技术实现转向产品规划，将技术思维应用于产品设计',
+      transferable_skills: ['逻辑思维', '用户需求理解', '项目管理', '技术评估'],
+      suggested_actions: ['学习产品方法论', '多参与产品评审', '培养商业敏感度']
+    });
+    moves.push({
+      target_title: '技术支持/解决方案工程师',
+      target_industry: '互联网',
+      description: '从开发转向客户技术支持，帮助客户解决技术问题',
+      transferable_skills: ['技术能力', '问题排查', '沟通能力', '客户服务'],
+      suggested_actions: ['提升沟通技巧', '学习产品知识', '培养客户思维']
+    });
+  } else if (jobTitle.includes('产品')) {
+    moves.push({
+      target_title: '运营经理',
+      target_industry: '互联网',
+      description: '从产品规划转向产品运营，将产品理念落地',
+      transferable_skills: ['用户理解', '数据分析', '项目协调', '产品思维'],
+      suggested_actions: ['学习运营方法论', '关注数据指标', '培养活动策划能力']
+    });
+    moves.push({
+      target_title: '用户研究/UX研究员',
+      target_industry: '互联网',
+      description: '深入研究用户行为和需求，为产品提供决策依据',
+      transferable_skills: ['用户思维', '数据分析', '洞察力', '同理心'],
+      suggested_actions: ['学习用户研究方法', '多做用户访谈', '培养分析能力']
+    });
+  } else {
+    moves.push({
+      target_title: '项目经理',
+      target_industry: '互联网',
+      description: '从业务执行转向项目管理，协调资源推动项目落地',
+      transferable_skills: ['业务理解', '沟通协调', '项目规划', '执行力'],
+      suggested_actions: ['学习项目管理方法', '提升组织协调能力', '培养风险意识']
+    });
+    moves.push({
+      target_title: '业务分析师',
+      target_industry: '互联网',
+      description: '深入分析业务数据，为业务决策提供支持',
+      transferable_skills: ['业务理解', '数据分析', '逻辑思维', '洞察能力'],
+      suggested_actions: ['提升数据分析能力', '学习商业分析方法', '培养商业敏感度']
+    });
+  }
+  
+  return moves;
+}
+
+// 为岗位添加晋升路径和横向换岗路径
+async function enrichJobWithPaths(job: any, jobProfiles: any[]) {
+  const jobTitle = job.title || job.job_title || '';
+  
+  // 匹配岗位画像
+  const matchedProfile = matchJobProfile(jobTitle, jobProfiles);
+  
+  let promotionPaths: any[] = [];
+  let lateralMoves: any[] = [];
+  
+  if (matchedProfile) {
+    console.log(`岗位 "${jobTitle}" 匹配到画像:`, matchedProfile.profile_name);
+    
+    // 从数据库获取真实路径
+    const dbPromotionPaths = await getPromotionPathsFromDB(matchedProfile.id);
+    const dbLateralMoves = await getLateralMovesFromDB(matchedProfile.id);
+    
+    promotionPaths = formatPromotionPathsForDisplay(jobTitle, dbPromotionPaths);
+    lateralMoves = formatLateralMovesForDisplay(jobTitle, dbLateralMoves);
+  } else {
+    console.log(`岗位 "${jobTitle}" 未匹配到画像，使用生成模式`);
+    // 使用回退方案
+    promotionPaths = generatePromotionPathsFallback(jobTitle);
+    lateralMoves = generateLateralMovesFallback(jobTitle);
+  }
+  
+  return {
+    ...job,
+    promotion_paths: promotionPaths,
+    lateral_moves: lateralMoves
+  };
 }
 
 // 人岗匹配分析API
@@ -345,6 +475,9 @@ router.post('/api/job-match', async (req, res) => {
       return res.status(500).json({ success: false, error: '数据库未配置' });
     }
     
+    // 加载岗位画像
+    const jobProfiles = await loadJobProfiles();
+    
     // 记录用户原始的筛选条件，用于后续提示
     const originalFilters: string[] = [];
     if (expectations.industry) originalFilters.push(`行业: ${expectations.industry}`);
@@ -356,7 +489,6 @@ router.post('/api/job-match', async (req, res) => {
     console.log('用户原始筛选条件:', originalFilters);
     
     // 智能放宽策略 - 确保至少找到5个岗位
-    // 按照优先级排序：先放宽影响最小的条件
     const relaxOrder = [
       { key: 'other', label: '其他要求', filterKey: null },
       { key: 'salary', label: '薪资', filterKey: null },
@@ -377,7 +509,6 @@ router.post('/api/job-match', async (req, res) => {
     console.log('开始智能放宽策略，目标：至少找到5个岗位');
     console.log('初始条件:', currentFilters);
     
-    // 第一轮：用所有条件搜索
     let searchFilters: Record<string, string> = {};
     Object.entries(currentFilters).forEach(([key, value]) => {
       if (value) searchFilters[key] = value;
@@ -401,22 +532,18 @@ router.post('/api/job-match', async (req, res) => {
     } else {
       console.log(`⚠️ 第1轮只找到 ${jobs.length} 个岗位，开始逐步放宽条件`);
       
-      // 逐步放宽条件
       for (let i = 0; i < relaxOrder.length; i++) {
         const relaxItem = relaxOrder[i];
         
-        // 跳过没有filterKey的项（薪资和其他要求本来就没在搜索条件里）
         if (!relaxItem.filterKey) {
           currentDropped.push(relaxItem.label);
           continue;
         }
         
-        // 放宽这个条件
         console.log(`🔄 第${i + 2}轮：放宽条件 - 去掉${relaxItem.label}`);
         delete (currentFilters as any)[relaxItem.filterKey];
         currentDropped.push(relaxItem.label);
         
-        // 构建新的搜索条件
         searchFilters = {};
         Object.entries(currentFilters).forEach(([key, value]) => {
           if (value) searchFilters[key] = value;
@@ -425,7 +552,6 @@ router.post('/api/job-match', async (req, res) => {
         console.log('当前搜索条件:', searchFilters);
         console.log('已放宽条件:', currentDropped);
         
-        // 搜索
         const response = await fetch('http://localhost:5000/api/jobs/search', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -437,7 +563,6 @@ router.post('/api/job-match', async (req, res) => {
         
         console.log(`本轮找到 ${jobs.length} 个岗位`);
         
-        // 如果找到足够的岗位，就停止
         if (jobs.length >= 5) {
           matchedJobs = jobs.slice(0, 5);
           finalDroppedConditions = [...currentDropped];
@@ -446,11 +571,9 @@ router.post('/api/job-match', async (req, res) => {
         }
       }
       
-      // 如果所有条件都放宽了还是不够5个，就用现有的，或者获取推荐岗位
       if (matchedJobs.length === 0) {
         console.log('⚠️ 所有条件都放宽了，尝试获取推荐岗位');
         
-        // 获取一些推荐岗位（不设任何条件）
         const allResponse = await fetch('http://localhost:5000/api/jobs/search', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -461,7 +584,6 @@ router.post('/api/job-match', async (req, res) => {
         const allJobs = allData.jobs || [];
         
         if (allJobs.length > 0) {
-          // 如果有岗位，取前5个
           matchedJobs = allJobs.slice(0, 5);
           finalDroppedConditions = ['行业', '岗位类型', '城市', '其他要求', '薪资'];
           console.log(`🎯 使用推荐岗位: ${matchedJobs.length} 个`);
@@ -471,7 +593,6 @@ router.post('/api/job-match', async (req, res) => {
       }
     }
     
-    // 构建提示信息
     let friendlyMessage = '';
     if (matchedJobs.length === 0) {
       friendlyMessage = '抱歉，暂时没有找到合适的岗位。请稍后再试或调整您的期望条件。';
@@ -486,10 +607,8 @@ router.post('/api/job-match', async (req, res) => {
     console.log('最终匹配岗位数:', matchedJobs.length);
     console.log('最终提示语:', friendlyMessage);
     
-    // 2. 调用AI进行匹配度分析
     let matchAnalysis = null;
     if (matchedJobs.length > 0) {
-      // 构建AI分析提示词
       const jobsSummary = matchedJobs.map((job: any, idx: number) => `
 岗位${idx + 1}:
 - 岗位名称: ${job.title}
@@ -523,34 +642,6 @@ ${jobsSummary}
 2. **看重潜力**：应届生或经验较少的候选人，看重学习能力和潜力
 3. **相关即可**：技能和经验相关即可，不需要完全一致
 4. **转移价值**：过往经验即使不是完全匹配，也有转移价值
-
-## 评分维度说明
-1. **基础要求匹配** (权重自适应): 学历、专业、工作年限等岗位硬性要求
-   - 学历相近、专业相关即可给高分
-   - 工作经验不足但有相关实习/项目经验也给高分
-2. **职业技能匹配** (权重自适应): 技术栈、工具、证书等专业技能
-   - 技能相关即可，不需要完全一致
-   - 有同类工具使用经验可给高分
-3. **职业素养匹配** (权重自适应): 沟通能力、抗压能力、团队协作等软技能
-   - 从简历描述中推断，只要有相关经历就给高分
-4. **发展潜力匹配** (权重自适应): 学习能力、创新能力、领导力等发展潜力
-   - 应届生这一项权重可以提高，看重学习能力和潜力
-
-## 权重自适应规则
-- 如果岗位对技术要求高，职业技能匹配权重增加
-- 如果岗位对经验要求高，基础要求匹配权重增加
-- 如果岗位是管理岗，职业素养和发展潜力权重增加
-- 如果是应届生或经验较少，发展潜力权重增加
-- 四个维度权重总和必须为100%
-
-## 打分标准（0-100分）
-每个维度单独打分，然后计算加权总分。
-- 80-100分：非常匹配，强烈推荐
-- 60-79分：比较匹配，可以推荐
-- 40-59分：一般匹配，需要考量
-- 0-39分：不太匹配
-
-**注意**：我们放宽了条件为用户找到的岗位，请尽量给合理的分数，鼓励用户！
 
 ## 输出格式要求
 请使用JSON格式输出，格式如下：
@@ -606,11 +697,9 @@ ${jobsSummary}
 注意：
 - 每个维度必须包含 strengths（优势项）和 gaps（差距项）
 - key_gaps 中的差距项需要在前端高亮显示
-- 权重必须根据岗位特点自适应调整
-- overall_score 是加权总分：(basic_score×basic_weight + skill_score×skill_weight + quality_score×quality_weight + potential_score×potential_weight) / 100
 - **不要输出任何友好提示语，只输出JSON代码块**
 `;
-
+      
       try {
         const chatResponse = await fetch('http://localhost:5000/api/chat', {
           method: 'POST',
@@ -644,58 +733,32 @@ ${jobsSummary}
                       aiResponse += parsed.content;
                     }
                   } catch {
-                    // 忽略解析错误
                   }
                 }
               }
             }
           }
           
-          // 提取JSON分析结果
           const jsonMatch = aiResponse.match(/```json\s*([\s\S]*?)```/);
           if (jsonMatch) {
             try {
               matchAnalysis = JSON.parse(jsonMatch[1]);
-              console.log('匹配分析完成:', Object.keys(matchAnalysis));
+              console.log('AI匹配分析完成:', Object.keys(matchAnalysis));
             } catch {
               console.error('解析匹配分析JSON失败');
             }
           }
-          
-          // 提取友好提示语 - 使用我们自定义的 friendlyMessage
-          const messageMatch = aiResponse.replace(/```json[\s\S]*?```/g, '').trim();
-          
-          // 保存分析结果到localStorage（通过前端完成，后端只返回数据）
-          res.json({
-            success: true,
-            message: friendlyMessage,  // 使用我们自定义的友好提示语
-            analysis: matchAnalysis,
-            jobs: matchedJobs
-          });
-          return;
-          
         }
       } catch (aiError) {
         console.error('AI分析失败:', aiError);
       }
     }
     
-    // 为每个岗位增加晋升路径和横向换岗路径
-    const enrichedJobs = matchedJobs.map(job => {
-      // 生成晋升路径（三级以上）
-      const promotionPaths = generatePromotionPaths(job);
-      
-      // 生成横向换岗路径（每个岗位不少于2条）
-      const lateralMoves = generateLateralMoves(job);
-      
-      return {
-        ...job,
-        promotion_paths: promotionPaths,
-        lateral_moves: lateralMoves
-      };
-    });
+    // 为每个岗位增加晋升路径和横向换岗路径（从数据库查询）
+    const enrichedJobs = await Promise.all(
+      matchedJobs.map(job => enrichJobWithPaths(job, jobProfiles))
+    );
     
-    // 如果有AI分析结果，也要把路径数据加进去
     let enrichedAnalysis = null;
     if (matchAnalysis && matchAnalysis.matches) {
       enrichedAnalysis = {
@@ -711,7 +774,6 @@ ${jobsSummary}
       };
     }
     
-    // 如果没有AI分析结果，返回基本信息（使用我们的friendlyMessage）
     res.json({
       success: true,
       message: friendlyMessage,
