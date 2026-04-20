@@ -2692,14 +2692,10 @@ ${jobsSummary}
           initProgressiveFilter()
         }
         
-        // 检测AI是否完成所有问题（说感谢的话）
-        // 关键修复：只有当我们确实收集了5个回答后才触发匹配
-        if ((finalContentToSave.includes('太感谢您的耐心配合') || 
-            finalContentToSave.includes('为您匹配岗位') ||
-            finalContentToSave.includes('请稍等片刻')) && 
-            isAIAskingExpectations && 
-            currentExpectationQuestion >= 5) {
-          console.log('AI完成5个问题收集，开始提取用户回答并调用岗位匹配')
+        // 【最最严格规则】只有当我们确实收集了5个回答后才触发匹配！
+        // 不管AI说了什么，只要 currentExpectationQuestion < 5，就绝对不触发匹配！
+        if (isAIAskingExpectations && currentExpectationQuestion >= 5) {
+          console.log('✅ 已收集完5个问题，开始提取用户回答并调用岗位匹配')
           console.log('当前问题计数:', currentExpectationQuestion)
           
           // 重置标志
@@ -2708,10 +2704,11 @@ ${jobsSummary}
           
           // 从对话历史中提取用户的5个回答
           extractAndCallJobMatch()
-        } else if (finalContentToSave.includes('为您匹配岗位') || 
-                   finalContentToSave.includes('请稍等片刻')) {
-          // 如果AI说了匹配的话但我们还没收集完5个问题，不触发匹配
-          console.log('AI提到匹配但未收集完5个问题，忽略，继续对话')
+        } else if (isAIAskingExpectations && (finalContentToSave.includes('为您匹配岗位') || 
+                   finalContentToSave.includes('请稍等片刻') ||
+                   finalContentToSave.includes('太感谢您的耐心配合'))) {
+          // 如果AI提前说了匹配的话但我们还没收集完5个问题，不触发匹配，继续让AI问问题
+          console.log('⚠️ AI提到匹配但未收集完5个问题，忽略，继续对话')
           console.log('当前问题计数:', currentExpectationQuestion, '/5')
         }
         
