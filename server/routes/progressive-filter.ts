@@ -218,39 +218,71 @@ function formatPromotionPathsForDisplay(jobTitle: string, dbPaths: any[]): any[]
   
   // 从数据库路径中提取晋升路线
   const verticalPaths = dbPaths.filter((p: any) => p.path_type === 'vertical');
+  const managementPaths = dbPaths.filter((p: any) => p.path_type === 'management');
   
-  for (let i = 0; i < Math.min(verticalPaths.length, 3); i++) {
+  let level = 2;
+  
+  // 先添加垂直晋升路径（同岗位内晋升）
+  for (let i = 0; i < Math.min(verticalPaths.length, 2); i++) {
     const path = verticalPaths[i];
-    paths.push({
-      level: i + 2,
-      title: path.to_job?.profile_name || `高级${jobTitle}`,
-      description: path.path_description || path.promotion_conditions || '承担更高级的工作职责',
-      typical_years: `${path.years_required || 2}-${path.years_required + 2 || 4}年`
-    });
-  }
-  
-  // 如果数据库路径不够3级，补充到4级
-  while (paths.length < 4) {
-    const level = paths.length + 1;
-    let title = '';
-    let desc = '';
-    
-    if (level === 2) {
-      title = `高级${jobTitle}`;
-      desc = '承担更复杂的工作职责，指导新人';
-    } else if (level === 3) {
-      title = '团队主管/负责人';
-      desc = '负责团队管理和业务规划';
-    } else {
-      title = '部门经理/总监';
-      desc = '负责部门战略和团队发展';
+    // 从路径描述中提取更明确的岗位名称
+    let title = path.to_job?.profile_name || jobTitle;
+    if (path.path_description) {
+      if (path.path_description.includes('中级')) {
+        title = '中级' + jobTitle;
+      } else if (path.path_description.includes('高级')) {
+        title = '高级' + jobTitle;
+      }
     }
-    
+    if (level === 2 && !title.includes('中级') && !title.includes('高级')) {
+      title = '中级' + jobTitle;
+    }
+    if (level === 3 && !title.includes('高级')) {
+      title = '高级' + jobTitle;
+    }
     paths.push({
       level: level,
       title: title,
+      description: path.path_description || path.promotion_conditions || '承担更高级的工作职责',
+      typical_years: `${path.years_required || 2}-${path.years_required + 1 || 3}年`
+    });
+    level++;
+  }
+  
+  // 添加管理岗晋升路径
+  if (managementPaths.length > 0 && level <= 4) {
+    const path = managementPaths[0];
+    paths.push({
+      level: level,
+      title: path.to_job?.profile_name || '技术主管/负责人',
+      description: path.path_description || path.promotion_conditions || '负责团队管理和业务规划',
+      typical_years: `${path.years_required || 3}-${path.years_required + 2 || 5}年`
+    });
+    level++;
+  }
+  
+  // 如果数据库路径不够4级，补充到4级
+  while (paths.length < 4) {
+    const currentLevel = paths.length + 1;
+    let title = '';
+    let desc = '';
+    
+    if (currentLevel === 2) {
+      title = '中级' + jobTitle;
+      desc = '承担更复杂的工作职责，指导初级同事';
+    } else if (currentLevel === 3) {
+      title = '高级' + jobTitle;
+      desc = '负责技术架构设计，带领团队';
+    } else {
+      title = '技术主管/负责人';
+      desc = '负责团队管理和业务规划';
+    }
+    
+    paths.push({
+      level: currentLevel,
+      title: title,
       description: desc,
-      typical_years: `${(level - 1) * 2}-${level * 2}年`
+      typical_years: `${(currentLevel - 1) * 2}-${currentLevel * 2}年`
     });
   }
   
