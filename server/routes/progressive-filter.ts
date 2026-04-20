@@ -109,7 +109,7 @@ interface FilterState {
 // 存储筛选状态（按会话或用户）
 const filterSessions = new Map<string, FilterState>();
 
-// 模糊匹配函数
+// 模糊匹配函数（更宽松的匹配）
 function fuzzyMatch(text: string | null, pattern: string): boolean {
   if (!text) return false;
   
@@ -119,13 +119,30 @@ function fuzzyMatch(text: string | null, pattern: string): boolean {
   // 1. 精确匹配
   if (normalizedText === normalizedPattern) return true;
   
-  // 2. 包含匹配
+  // 2. 包含匹配（文本包含模式）
   if (normalizedText.includes(normalizedPattern)) return true;
   
-  // 3. 分词匹配
-  const patternWords = normalizedPattern.split(/[\s,，、]+/).filter(w => w);
+  // 3. 模式包含文本（更宽松）
+  if (normalizedPattern.includes(normalizedText)) return true;
+  
+  // 4. 分词匹配 - 任意一个词匹配即可
+  const patternWords = normalizedPattern.split(/[\s,，、/\\-]+/).filter(w => w && w.length >= 2);
   if (patternWords.length > 0) {
-    return patternWords.some(word => normalizedText.includes(word));
+    for (const word of patternWords) {
+      if (normalizedText.includes(word)) {
+        return true;
+      }
+    }
+  }
+  
+  // 5. 文本分词 - 任意一个词包含在模式中
+  const textWords = normalizedText.split(/[\s,，、/\\-]+/).filter(w => w && w.length >= 2);
+  if (textWords.length > 0) {
+    for (const word of textWords) {
+      if (normalizedPattern.includes(word)) {
+        return true;
+      }
+    }
   }
   
   return false;
@@ -176,28 +193,47 @@ function filterJobs(jobs: JobRecord[], filters: FilterState['filters'], step: nu
   
   let filtered = [...jobs];
   
-  // 第1步：行业筛选
+  // 第1步：行业筛选（支持多选行业的"或者"关系）
   if (step >= 1 && filters.industry) {
-    const industry = filters.industry;
-    filtered = filtered.filter(job => fuzzyMatch(job.industry, industry));
-    console.log(`行业筛选后: ${filtered.length}个岗位`);
+    const industryInput = filters.industry;
+    const industries = industryInput.split(/[,，\s、]+/).filter(i => i.trim());
+    
+    if (industries.length > 0) {
+      filtered = filtered.filter(job => 
+        industries.some(industry => fuzzyMatch(job.industry, industry.trim()))
+      );
+      console.log(`行业筛选后: ${filtered.length}个岗位 (行业: ${industries.join(', ')})`);
+    }
   }
   
-  // 第2步：岗位类型筛选
+  // 第2步：岗位类型筛选（支持多选岗位类型的"或者"关系）
   if (step >= 2 && filters.jobType) {
-    const jobType = filters.jobType;
-    filtered = filtered.filter(job => 
-      fuzzyMatch(job.job_title, jobType) || 
-      fuzzyMatch(job.job_description, jobType)
-    );
-    console.log(`岗位类型筛选后: ${filtered.length}个岗位`);
+    const jobTypeInput = filters.jobType;
+    const jobTypes = jobTypeInput.split(/[,，\s、]+/).filter(j => j.trim());
+    
+    if (jobTypes.length > 0) {
+      filtered = filtered.filter(job => 
+        jobTypes.some(jobType => 
+          fuzzyMatch(job.job_title, jobType.trim()) || 
+          fuzzyMatch(job.job_description, jobType.trim())
+        )
+      );
+      console.log(`岗位类型筛选后: ${filtered.length}个岗位 (类型: ${jobTypes.join(', ')})`);
+    }
   }
   
-  // 第3步：城市筛选
+  // 第3步：城市筛选（支持多选城市的"或者"关系）
   if (step >= 3 && filters.city) {
-    const city = filters.city;
-    filtered = filtered.filter(job => fuzzyMatch(job.address, city));
-    console.log(`城市筛选后: ${filtered.length}个岗位`);
+    const cityInput = filters.city;
+    // 分割多个城市（支持中文逗号、英文逗号、空格分隔）
+    const cities = cityInput.split(/[,，\s、]+/).filter(c => c.trim());
+    
+    if (cities.length > 0) {
+      filtered = filtered.filter(job => 
+        cities.some(city => fuzzyMatch(job.address, city.trim()))
+      );
+      console.log(`城市筛选后: ${filtered.length}个岗位 (城市: ${cities.join(', ')})`);
+    }
   }
   
   // 第4步：薪资筛选（简化处理，不严格限制）
@@ -361,20 +397,20 @@ router.post('/api/progressive-filter/final', async (req, res) => {
     
     console.log(`最终筛选结果: ${filteredJobs.length} 个岗位`);
     
-    // 如果没有筛选结果，放宽条件
+    // 如果筛选结果太少（少于5个），才适当放宽条件
     let finalJobs = filteredJobs;
     let relaxedMessage = '';
     
-    if (filteredJobs.length === 0) {
-      console.log('没有筛选结果，开始放宽条件');
+    const MIN_RESULTS = 5; // 至少需要5个岗位给AI选择
+    
+    if (filteredJobs.length < MIN_RESULTS) {
+      console.log(`筛选结果较少 (${filteredJobs.length}个)，尝试适当放宽条件`);
       
-      // 逐步放宽条件
+      // 只放宽一些非关键条件，不要一下子全放宽
       const relaxStrategies = [
-        { step: 4, drop: ['other'], msg: '放宽了其他要求' },
-        { step: 3, drop: ['salary', 'other'], msg: '放宽了薪资和其他要求' },
-        { step: 2, drop: ['city', 'salary', 'other'], msg: '放宽了城市、薪资和其他要求' },
-        { step: 1, drop: ['jobType', 'city', 'salary', 'other'], msg: '放宽了岗位类型、城市、薪资和其他要求' },
-        { step: 0, drop: ['industry', 'jobType', 'city', 'salary', 'other'], msg: '已放宽所有条件' }
+        { step: 5, drop: ['other'], msg: '放宽了其他要求' },
+        { step: 4, drop: ['other', 'salary'], msg: '放宽了薪资和其他要求' },
+        { step: 3, drop: ['other', 'salary'], msg: '放宽了薪资和其他要求' }
       ];
       
       for (const strategy of relaxStrategies) {
@@ -384,20 +420,34 @@ router.post('/api/progressive-filter/final', async (req, res) => {
         });
         
         const relaxedJobs = filterJobs(filterState.allJobs, relaxedFilters, strategy.step);
-        if (relaxedJobs.length > 0) {
+        if (relaxedJobs.length >= MIN_RESULTS) {
           finalJobs = relaxedJobs;
           relaxedMessage = strategy.msg;
           console.log(`放宽策略成功: ${strategy.msg}, 获得 ${relaxedJobs.length} 个岗位`);
           break;
+        } else if (relaxedJobs.length > filteredJobs.length) {
+          // 即使不够MIN_RESULTS，只要比之前多就用这个
+          finalJobs = relaxedJobs;
+          relaxedMessage = strategy.msg;
+          console.log(`放宽策略获得更多岗位: ${strategy.msg}, ${filteredJobs.length} → ${relaxedJobs.length}`);
         }
       }
       
-      // 如果还是没有，返回所有岗位
+      // 如果放宽后还是很少，但至少有1个以上，就用这些
+      if (finalJobs.length === 0 && filteredJobs.length > 0) {
+        finalJobs = filteredJobs;
+        console.log(`使用原筛选结果: ${filteredJobs.length} 个岗位`);
+      }
+      
+      // 只有真的完全没有结果时，才返回一些推荐岗位
       if (finalJobs.length === 0) {
-        finalJobs = filterState.allJobs.slice(0, 100);
-        relaxedMessage = '已放宽所有条件，返回推荐岗位';
+        finalJobs = filterState.allJobs.slice(0, 20);
+        relaxedMessage = '基于您的背景为您推荐岗位';
+        console.log('无筛选结果，返回推荐岗位');
       }
     }
+    
+    console.log(`最终用于AI匹配的岗位数: ${finalJobs.length}`);
     
     // 格式化岗位数据
     const jobs = finalJobs.map((job) => ({
