@@ -1505,6 +1505,10 @@ ${currentConditions.join('\n')}
   
   // 用新消息重新匹配
   async function reMatchWithNewMessage(message: string) {
+    // 【关键】设置重新匹配场景标志！
+    localStorage.setItem('isInRematchScenario', 'true')
+    console.log('设置重新匹配场景标志')
+    
     // 显示处理中
     const aiMessageDiv = addMessage('好的，正在理解您的新需求并重新匹配……', false)
     const aiTextElement = aiMessageDiv?.querySelector('.ai-message') as HTMLElement
@@ -1525,7 +1529,7 @@ ${currentConditions.join('\n')}
       
       // 重置状态
       isAIAskingExpectations = false
-      isAdjustingConditions = false
+      isAdjustingConditions = true  // 标记为正在调整条件
       careerExpectations = {}
       currentExpectationQuestion = 0
       
@@ -1602,6 +1606,8 @@ ${currentConditions.join('\n')}
       
     } catch (error) {
       console.error('重新匹配出错:', error)
+      // 清除标志
+      localStorage.removeItem('isInRematchScenario')
       if (aiTextElement) {
         aiTextElement.textContent = '抱歉，处理您的调整需求时出现问题，请稍后重试。'
       }
@@ -1849,6 +1855,9 @@ ${currentConditions.join('\n')}
       progressiveFilterSessionId = null
       progressiveFilterInitialized = false
       progressiveFilterCounts = []
+      
+      // 确保清除重新匹配场景标志（防止残留）
+      localStorage.removeItem('isInRematchScenario')
       
       // 恢复发送按钮，隐藏停止按钮
       if (sendBtn) {
@@ -2738,9 +2747,22 @@ ${jobsSummary}
           initProgressiveFilter()
         }
         
-        // 【最最严格规则】只有当我们确实收集了5个回答后才触发匹配！
+        // 检测是否在重新匹配场景中
+        const isInRematchScenario = localStorage.getItem('isInRematchScenario') === 'true'
+        
+        // 【关键】如果在重新匹配场景中，且AI说要匹配，直接触发！
+        if (isInRematchScenario && (finalContentToSave.includes('为您匹配岗位') || 
+                                     finalContentToSave.includes('请稍等片刻') ||
+                                     finalContentToSave.includes('太感谢您的耐心配合'))) {
+          console.log('✅ 在重新匹配场景中，AI说匹配，直接触发！')
+          // 清除标志
+          localStorage.removeItem('isInRematchScenario')
+          // 直接触发匹配
+          await extractAndCallJobMatch()
+        } 
+        // 【最最严格规则】只有当我们确实收集了5个回答后才触发匹配！（正常场景）
         // 不管AI说了什么，只要 currentExpectationQuestion < 5，就绝对不触发匹配！
-        if (isAIAskingExpectations && currentExpectationQuestion >= 5) {
+        else if (isAIAskingExpectations && currentExpectationQuestion >= 5) {
           console.log('✅ 已收集完5个问题，开始提取用户回答并调用岗位匹配')
           console.log('当前问题计数:', currentExpectationQuestion)
           
@@ -2750,7 +2772,7 @@ ${jobsSummary}
           
           // 从对话历史中提取用户的5个回答
           extractAndCallJobMatch()
-        } else if (isAIAskingExpectations && !isAdjustingConditions && (finalContentToSave.includes('为您匹配岗位') || 
+        } else if (isAIAskingExpectations && !isAdjustingConditions && !isInRematchScenario && (finalContentToSave.includes('为您匹配岗位') || 
                    finalContentToSave.includes('请稍等片刻') ||
                    finalContentToSave.includes('太感谢您的耐心配合'))) {
           // 如果AI提前说了匹配的话但我们还没收集完5个问题，而且不是在调整条件的场景下，才忽略
