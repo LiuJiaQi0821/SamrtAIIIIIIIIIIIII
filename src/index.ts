@@ -963,6 +963,100 @@ function createApp() {
             `
           }
           
+          // 晋升路径（三级以上）
+          const promotionPaths = match.promotion_paths || match.promotionPaths || []
+          if (promotionPaths.length >= 3) {
+            html += `
+              <div class="mt-4 p-3 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border-2 border-green-200">
+                <h5 class="text-sm font-bold text-green-800 mb-3 flex items-center gap-2">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+                  </svg>
+                  职业晋升路径
+                </h5>
+                <div class="space-y-2">
+                  ${promotionPaths.map((path: any) => `
+                    <div class="flex items-start gap-3 p-2 bg-white rounded-lg shadow-sm border border-green-100">
+                      <div class="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center text-white font-bold text-sm">
+                        ${path.level}
+                      </div>
+                      <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2 mb-1">
+                          <span class="font-semibold text-green-900 text-sm">${path.title}</span>
+                          <span class="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full">${path.typical_years}</span>
+                        </div>
+                        <p class="text-xs text-gray-600">${path.description}</p>
+                      </div>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            `
+          }
+          
+          // 横向换岗路径（不少于2条）
+          const lateralMoves = match.lateral_moves || match.lateralMoves || []
+          if (lateralMoves.length >= 2) {
+            html += `
+              <div class="mt-4 p-3 bg-gradient-to-r from-violet-50 to-purple-50 rounded-lg border-2 border-violet-200">
+                <h5 class="text-sm font-bold text-violet-800 mb-3 flex items-center gap-2">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path>
+                  </svg>
+                  横向换岗路径 (${lateralMoves.length}条)
+                </h5>
+                <div class="space-y-3">
+                  ${lateralMoves.map((move: any) => `
+                    <div class="p-3 bg-white rounded-lg shadow-sm border border-violet-100">
+                      <div class="flex items-start gap-3 mb-2">
+                        <div class="flex-shrink-0 w-10 h-10 rounded-xl bg-gradient-to-br from-violet-400 to-purple-500 flex items-center justify-center">
+                          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path>
+                          </svg>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                          <div class="flex items-center gap-2 mb-1">
+                            <span class="font-semibold text-violet-900 text-sm">${move.target_title}</span>
+                            <span class="text-xs px-2 py-0.5 bg-violet-100 text-violet-700 rounded-full">${move.target_industry}</span>
+                          </div>
+                          <p class="text-xs text-gray-600 mb-2">${move.description}</p>
+                        </div>
+                      </div>
+                      <div class="space-y-2">
+                        <div>
+                          <span class="text-xs font-medium text-violet-700 flex items-center gap-1 mb-1">
+                            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                            </svg>
+                            可迁移技能：
+                          </span>
+                          <div class="flex flex-wrap gap-1">
+                            ${(move.transferable_skills || []).map((skill: string) => `
+                              <span class="text-xs px-2 py-0.5 bg-violet-50 text-violet-700 rounded border border-violet-100">${skill}</span>
+                            `).join('')}
+                          </div>
+                        </div>
+                        <div>
+                          <span class="text-xs font-medium text-amber-700 flex items-center gap-1 mb-1">
+                            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                              <path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clip-rule="evenodd"></path>
+                            </svg>
+                            建议行动：
+                          </span>
+                          <div class="flex flex-wrap gap-1">
+                            ${(move.suggested_actions || []).map((action: string) => `
+                              <span class="text-xs px-2 py-0.5 bg-amber-50 text-amber-700 rounded border border-amber-100">${action}</span>
+                            `).join('')}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            `
+          }
+          
           html += `
               </div>
             </div>
