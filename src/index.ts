@@ -1523,9 +1523,20 @@ ${currentConditions.join('\n')}
       // 把新消息交给AI处理，让AI理解用户想怎么调整
       const adjustPrompt = `用户对之前的岗位匹配结果不满意，想要调整。用户说："${message}"
 
-请根据用户的需求，重新询问用户的职业期望（5个问题），以便重新匹配岗位。
+【重要规则】请判断用户的意图：
 
-请用友好的方式询问用户新的期望条件。`
+情况1：如果用户已经明确说了新的条件（如"换广州"、"换成杭州"、"换北京地区"等），说明用户已经给出了明确的条件，你不需要再问问题！
+
+此时你应该：
+- 直接确认理解了用户的需求
+- 回复必须以 【MATCH_START】 开头（这是系统标记，必须包含）
+- 示例回复：【MATCH_START 没问题呀~ 我马上为您调整工作城市为杭州，重新匹配适合的岗位，请稍等片刻哦~
+
+情况2：如果用户只是说想调整但没有给具体条件（如"能帮我换个岗位吗"、"不满意"），你需要询问用户新的条件。
+
+此时你应该：
+- 用友好的方式询问用户新的期望条件
+- 正常回复即可，不需要特殊标记`
       
       // 重置状态
       isAIAskingExpectations = false
@@ -1584,15 +1595,20 @@ ${currentConditions.join('\n')}
         
         conversationHistory.push({ role: 'assistant', content: aiResponse })
         
-        // 【关键】先判断AI是否直接说匹配，如果是，先初始化筛选再触发！
-        if (aiResponse.includes('为您匹配岗位') || aiResponse.includes('请稍等') || 
-            aiResponse.includes('太感谢您的耐心配合')) {
-          console.log('AI在重新匹配场景下直接说要匹配！先初始化筛选再触发！')
-          // 标记为正在调整条件
+        // 【最可靠的方式】只检测特殊标记 【MATCH_START】
+        if (aiResponse.includes('【MATCH_START】')) {
+          console.log('✅ 检测到匹配标记【MATCH_START】，直接触发匹配！')
+          // 从回复中移除标记（不展示给用户）
+          const cleanResponse = aiResponse.replace('【MATCH_START】', '').trim()
+          if (aiTextElement) {
+            aiTextElement.textContent = cleanResponse
+          }
+          // 更新历史记录（移除标记）
+          conversationHistory[conversationHistory.length - 1] = { role: 'assistant', content: cleanResponse }
+          
+          // 先初始化筛选再触发匹配
           isAdjustingConditions = true
-          // 【重要】先初始化渐进式筛选！
           await initProgressiveFilter()
-          // 直接调用岗位匹配！
           await extractAndCallJobMatch()
         } 
         // 否则检测AI是否开始问新的期望问题
@@ -2762,14 +2778,21 @@ ${jobsSummary}
         // 检测是否在重新匹配场景中
         const isInRematchScenario = localStorage.getItem('isInRematchScenario') === 'true'
         
-        // 【关键】如果在重新匹配场景中，且AI说要匹配，直接触发！
-        if (isInRematchScenario && (finalContentToSave.includes('为您匹配岗位') || 
-                                     finalContentToSave.includes('请稍等') ||
-                                     finalContentToSave.includes('太感谢您的耐心配合'))) {
-          console.log('✅ 在重新匹配场景中，AI说匹配，直接触发！')
+        // 【最可靠的方式】只检测特殊标记 【MATCH_START】
+        if (finalContentToSave.includes('【MATCH_START】')) {
+          console.log('✅ 在重新匹配场景中，检测到匹配标记【MATCH_START】，直接触发！')
           // 清除标志
           localStorage.removeItem('isInRematchScenario')
-          // 直接触发匹配
+          // 从回复中移除标记（不展示给用户）
+          const cleanResponse = finalContentToSave.replace('【MATCH_START】', '').trim()
+          if (aiTextElement) {
+            aiTextElement.textContent = cleanResponse
+          }
+          finalContentToSave = cleanResponse
+          conversationHistory[conversationHistory.length - 1] = { role: 'assistant', content: cleanResponse }
+          
+          // 直接触发匹配（先初始化筛选）
+          await initProgressiveFilter()
           await extractAndCallJobMatch()
         } 
         // 【最最严格规则】只有当我们确实收集了5个回答后才触发匹配！（正常场景）
