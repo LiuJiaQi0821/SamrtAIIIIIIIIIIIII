@@ -1585,7 +1585,7 @@ ${currentConditions.join('\n')}
         conversationHistory.push({ role: 'assistant', content: aiResponse })
         
         // 【关键】先判断AI是否直接说匹配，如果是，先初始化筛选再触发！
-        if (aiResponse.includes('为您匹配岗位') || aiResponse.includes('请稍等片刻') || 
+        if (aiResponse.includes('为您匹配岗位') || aiResponse.includes('请稍等') || 
             aiResponse.includes('太感谢您的耐心配合')) {
           console.log('AI在重新匹配场景下直接说要匹配！先初始化筛选再触发！')
           // 标记为正在调整条件
@@ -2753,7 +2753,7 @@ ${jobsSummary}
         
         // 【关键】如果在重新匹配场景中，且AI说要匹配，直接触发！
         if (isInRematchScenario && (finalContentToSave.includes('为您匹配岗位') || 
-                                     finalContentToSave.includes('请稍等片刻') ||
+                                     finalContentToSave.includes('请稍等') ||
                                      finalContentToSave.includes('太感谢您的耐心配合'))) {
           console.log('✅ 在重新匹配场景中，AI说匹配，直接触发！')
           // 清除标志
@@ -2774,7 +2774,7 @@ ${jobsSummary}
           // 从对话历史中提取用户的5个回答
           extractAndCallJobMatch()
         } else if (isAIAskingExpectations && !isAdjustingConditions && !isInRematchScenario && (finalContentToSave.includes('为您匹配岗位') || 
-                   finalContentToSave.includes('请稍等片刻') ||
+                   finalContentToSave.includes('请稍等') ||
                    finalContentToSave.includes('太感谢您的耐心配合'))) {
           // 如果AI提前说了匹配的话但我们还没收集完5个问题，而且不是在调整条件的场景下，才忽略
           console.log('⚠️ AI提到匹配但未收集完5个问题，忽略，继续对话')
